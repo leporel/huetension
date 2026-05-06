@@ -1,0 +1,16 @@
+.prompts/
+.refs/
+
+# Build artifacts
+/dist/
+/bin/
+./huetension
+./huetension.exe
+*.test
+*.out
+coverage.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
