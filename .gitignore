@@ -4,8 +4,9 @@
 # Build artifacts
 /dist/
 /bin/
-./huetension
-./huetension.exe
+huetension
+huetension.exe
+!/cmd/huetension
 *.test
 *.out
 coverage.*

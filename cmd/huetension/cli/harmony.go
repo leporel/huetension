@@ -53,7 +53,7 @@ func newHarmonyCmd() *cobra.Command {
 	}
 
 	addOutputFlags(cmd, &of, "text")
-	cmd.Flags().IntVarP(&hf.count, "count", "c", 0, "palette size for analogous / monochromatic / shades (defaults: 3 / 5 / 5)")
+	cmd.Flags().IntVarP(&hf.count, "count", "c", 0, "palette size; for hue harmonies extra slots cycle anchors with HSV variations (Adobe Kuler style); defaults for analogous/monochromatic/shades: 3/5/5")
 	cmd.Flags().Float64Var(&hf.step, "step", 0, "analogous only: angular step in degrees (default 30)")
 	cmd.Flags().StringVar(&hf.sortBy, "sort", "", "sort palette by (luminance|lightness|okl|hue|saturation|frequency)")
 	cmd.Flags().BoolVar(&hf.reverse, "reverse", false, "reverse the sort order")

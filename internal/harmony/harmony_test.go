@@ -187,6 +187,80 @@ func TestUnknownType(t *testing.T) {
 	}
 }
 
+func TestHueHarmonyCountExpansion(t *testing.T) {
+	red := mustParse(t, "red")
+
+	// Complementary count=5 → first two are red/cyan anchors, slots 2..4 are
+	// HSV variations cycling back through the anchors.
+	got, err := Generate(Complementary, red, Options{Count: 5})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if len(got) != 5 {
+		t.Fatalf("len = %d, want 5", len(got))
+	}
+	if got[0] != red {
+		t.Errorf("slot 0 should be base bit-exact, got %v", got[0])
+	}
+	if !closeHex(got[1], mustParse(t, "cyan")) {
+		t.Errorf("slot 1 = %s, want cyan", got[1].Hex())
+	}
+	// Slot 2 cycles back to anchor 0 (red) with ring-1 delta (V +0.20).
+	// Red is already at V=1, so V is clamped — slot 2 should still differ from
+	// pure red because the table moves it through HSV at all only if the V
+	// has headroom; for fully-saturated red the slot collapses onto red.
+	// Slot 3 cycles to anchor 1 (cyan) with ring-1 delta — also clamped.
+	// Slot 4 cycles to anchor 0 with ring-2 delta (S -0.25) → desaturated red.
+	if got[4] == red {
+		t.Errorf("slot 4 should differ from base after S desaturation, got %s", got[4].Hex())
+	}
+	// Slot 4 = anchor 0 (red, HSV S=1) at ring 2 (S -0.25) → HSV S=0.75.
+	_, redHSVSat, _ := red.ToHSV()
+	_, slot4HSVSat, _ := got[4].ToHSV()
+	if slot4HSVSat >= redHSVSat {
+		t.Errorf("slot 4 HSV saturation %.2f, want < %.2f", slot4HSVSat, redHSVSat)
+	}
+
+	// Triadic count=2 → too small, error.
+	if _, err := Generate(Triadic, red, Options{Count: 2}); err == nil {
+		t.Errorf("expected error for triadic count=2")
+	}
+
+	// Tetradic count=4 → identical to natural (count=0) output.
+	natural, _ := Generate(Tetradic, red, Options{})
+	expanded, err := Generate(Tetradic, red, Options{Count: 4})
+	if err != nil {
+		t.Fatalf("Generate tetradic count=4: %v", err)
+	}
+	if len(expanded) != 4 {
+		t.Fatalf("len = %d, want 4", len(expanded))
+	}
+	for i := range natural {
+		if natural[i] != expanded[i] {
+			t.Errorf("count=4 should match natural at %d: %s vs %s",
+				i, natural[i].Hex(), expanded[i].Hex())
+		}
+	}
+}
+
+func TestHueHarmonyCountDeterministic(t *testing.T) {
+	// Same inputs must produce byte-identical outputs (wire-contract guarantee).
+	base := mustParse(t, "#3366cc")
+	a, _ := Generate(Triadic, base, Options{Count: 7})
+	b, _ := Generate(Triadic, base, Options{Count: 7})
+	if len(a) != 7 || len(b) != 7 {
+		t.Fatalf("unexpected lengths: %d, %d", len(a), len(b))
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			t.Errorf("non-deterministic at %d: %s vs %s", i, a[i].Hex(), b[i].Hex())
+		}
+	}
+	if a[0] != base {
+		t.Errorf("slot 0 should be base bit-exact, got %s", a[0].Hex())
+	}
+}
+
 func TestBaseAtKnownIndex(t *testing.T) {
 	// Pick a desaturated base that would drift if regenerated through HSL.
 	base := mustParse(t, "#7C8A99")

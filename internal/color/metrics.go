@@ -41,6 +41,11 @@ func (c Color) ToHSL() (h, s, l float64) {
 	return c.toColorful().Hsl()
 }
 
+// ToHSV returns (H deg, S 0..1, V 0..1).
+func (c Color) ToHSV() (h, s, v float64) {
+	return c.toColorful().Hsv()
+}
+
 // ToLab returns CSS-scaled Lab: L 0..100, a/b roughly ±125.
 func (c Color) ToLab() (L, a, b float64) {
 	cl, ca, cb := c.toColorful().Lab()

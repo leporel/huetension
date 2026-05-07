@@ -6,6 +6,11 @@
 // hue-rotation harmonies and shades, the middle slot for analogous and
 // odd-count monochromatic) and is preserved bit-exact, sidestepping
 // HSL round-trip drift on desaturated inputs.
+//
+// Hue-rotation harmonies (complementary, triadic, split, tetradic, square,
+// double-complementary) accept Options.Count to produce more slots than the
+// natural anchor set: extra slots cycle through anchors round-robin and apply
+// a deterministic HSV variation table — the Adobe Kuler approach.
 package harmony
 
 import (
@@ -32,12 +37,35 @@ const (
 // Options tunes count- and angle-bearing harmonies. Zero values fall back to
 // type-specific defaults.
 type Options struct {
-	// Count is the palette size for monochromatic / shades / analogous.
-	// Defaults: analogous=3, monochromatic=5, shades=5.
+	// Count is the palette size.
+	//
+	// For hue-rotation harmonies it must be ≥ the natural anchor count
+	// (complementary 2, triadic 3, split 3, tetradic/square 4,
+	// double-complementary 4); when 0, the natural anchor count is used.
+	//
+	// For analogous / monochromatic / shades, defaults: 3 / 5 / 5.
 	Count int
 	// Step is the angular distance between analogous neighbours, in degrees.
 	// Default 30°.
 	Step float64
+}
+
+// hsvDelta is the HSV (S, V) offset applied at a given Kuler-style ring.
+type hsvDelta struct{ s, v float64 }
+
+// ringDeltas is the cyclic HSV variation table used to fill slots beyond the
+// natural anchor count. Ring 0 is reserved for the unmodified anchors; the
+// table starts at ring 1. Five entries → after 5 rings the pattern repeats.
+//
+// Values are intentionally moderate so a single anchor's variants stay
+// visually related. FromHSV clamps so out-of-gamut combinations degrade
+// gracefully on near-white / near-black inputs.
+var ringDeltas = []hsvDelta{
+	{s: 0, v: 0.20},     // ring 1: lighter (tint)
+	{s: -0.25, v: 0},    // ring 2: desaturated
+	{s: 0, v: -0.20},    // ring 3: darker (shade)
+	{s: -0.25, v: 0.15}, // ring 4: soft tint
+	{s: 0.15, v: -0.15}, // ring 5: punchier
 }
 
 // Generate returns the harmony for base with the given options. The returned
@@ -45,7 +73,7 @@ type Options struct {
 func Generate(t Type, base color.Color, opts Options) ([]color.Color, error) {
 	switch t {
 	case Complementary:
-		return rotateHues(base, []float64{0, 180}), nil
+		return expandIfNeeded(t, rotateHues(base, []float64{0, 180}), opts.Count)
 	case Analogous:
 		count := opts.Count
 		if count <= 0 {
@@ -57,13 +85,13 @@ func Generate(t Type, base color.Color, opts Options) ([]color.Color, error) {
 		}
 		return analogous(base, count, step), nil
 	case Triadic:
-		return rotateHues(base, []float64{0, 120, 240}), nil
+		return expandIfNeeded(t, rotateHues(base, []float64{0, 120, 240}), opts.Count)
 	case Split:
-		return rotateHues(base, []float64{0, 150, 210}), nil
+		return expandIfNeeded(t, rotateHues(base, []float64{0, 150, 210}), opts.Count)
 	case Tetradic, Square:
-		return rotateHues(base, []float64{0, 90, 180, 270}), nil
+		return expandIfNeeded(t, rotateHues(base, []float64{0, 90, 180, 270}), opts.Count)
 	case DoubleComplementary:
-		return rotateHues(base, []float64{0, 60, 180, 240}), nil
+		return expandIfNeeded(t, rotateHues(base, []float64{0, 60, 180, 240}), opts.Count)
 	case Monochromatic:
 		count := opts.Count
 		if count <= 0 {
@@ -94,6 +122,29 @@ func rotateHues(base color.Color, offsets []float64) []color.Color {
 		out[i] = color.FromHSL(h+o, s, l)
 	}
 	return out
+}
+
+// expandIfNeeded returns anchors as-is when count is 0 or equals the anchor
+// count, errors when count is below the anchor count, and otherwise expands
+// the palette by cycling through anchors with HSV ring variations.
+func expandIfNeeded(t Type, anchors []color.Color, count int) ([]color.Color, error) {
+	n := len(anchors)
+	if count == 0 || count == n {
+		return anchors, nil
+	}
+	if count < n {
+		return nil, fmt.Errorf("harmony: count=%d too small for %s (min %d)", count, t, n)
+	}
+	out := make([]color.Color, count)
+	copy(out, anchors)
+	for i := n; i < count; i++ {
+		anchor := anchors[i%n]
+		ring := (i/n - 1) % len(ringDeltas)
+		d := ringDeltas[ring]
+		h, s, v := anchor.ToHSV()
+		out[i] = color.FromHSV(h, s+d.s, v+d.v)
+	}
+	return out, nil
 }
 
 func analogous(base color.Color, count int, step float64) []color.Color {

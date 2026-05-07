@@ -42,6 +42,7 @@ func TestRandomCmdRespectsCount(t *testing.T) {
 }
 
 func TestRandomCmdHarmony(t *testing.T) {
+	// Default --count=5 with triadic (3 anchors) → Kuler-style expansion to 5.
 	stdout := withStdoutBuffer(t)
 	cmd := newRandomCmd()
 	cmd.SetOut(&bytes.Buffer{})
@@ -51,9 +52,35 @@ func TestRandomCmdHarmony(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
-	// triadic = 3 colors regardless of --count.
+	if len(lines) != 5 {
+		t.Errorf("got %d lines, want 5 (default --count=5 expanded)", len(lines))
+	}
+}
+
+func TestRandomCmdHarmonyNaturalCount(t *testing.T) {
+	// Explicit --count=3 with triadic → exactly the 3 natural anchors.
+	stdout := withStdoutBuffer(t)
+	cmd := newRandomCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"--seed", "100", "--harmony", "triadic", "--count", "3", "--format", "txt"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
 	if len(lines) != 3 {
 		t.Errorf("got %d lines, want 3 for triadic", len(lines))
+	}
+}
+
+func TestRandomCmdHarmonyCountTooSmall(t *testing.T) {
+	// --count below the natural anchor count must error.
+	cmd := newRandomCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"--seed", "100", "--harmony", "triadic", "--count", "2", "--format", "txt"})
+	if err := cmd.Execute(); err == nil {
+		t.Errorf("expected error for triadic --count=2")
 	}
 }
 
