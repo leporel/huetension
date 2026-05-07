@@ -137,3 +137,112 @@ func TestResolveEnabledUnknownTool(t *testing.T) {
 		t.Errorf("expected error for unknown tool in --disable")
 	}
 }
+
+// TestSelectorNamespacing covers the "tools:NAME / resources:URI /
+// prompts:NAME / kind:* / bare-name → tool" parser. Drives all three
+// Resolve* paths so back-compat (bare names still mean tools) and the
+// new namespaced syntax are pinned together.
+func TestSelectorNamespacing(t *testing.T) {
+	t.Run("bare name is a tool", func(t *testing.T) {
+		got, err := ResolveEnabled(Config{Enable: []string{"color.convert"}})
+		if err != nil {
+			t.Fatalf("ResolveEnabled: %v", err)
+		}
+		if len(got) != 1 || got[0].Name != "color.convert" {
+			t.Errorf("expected only color.convert, got %v", got)
+		}
+		// Resources/prompts are not constrained by a tool-only --enable.
+		rs, err := ResolveEnabledResources(Config{Enable: []string{"color.convert"}})
+		if err != nil {
+			t.Fatalf("ResolveEnabledResources: %v", err)
+		}
+		if len(rs) == 0 {
+			t.Errorf("resources should default-enable when --enable only names tools")
+		}
+		ps, err := ResolveEnabledPrompts(Config{Enable: []string{"color.convert"}})
+		if err != nil {
+			t.Fatalf("ResolveEnabledPrompts: %v", err)
+		}
+		if len(ps) == 0 {
+			t.Errorf("prompts should default-enable when --enable only names tools")
+		}
+	})
+
+	t.Run("resources wildcard disable", func(t *testing.T) {
+		rs, err := ResolveEnabledResources(Config{Disable: []string{"resources:*"}})
+		if err != nil {
+			t.Fatalf("ResolveEnabledResources: %v", err)
+		}
+		if len(rs) != 0 {
+			t.Errorf("resources:* in --disable should drop all resources, got %d", len(rs))
+		}
+	})
+
+	t.Run("prompts targeted disable", func(t *testing.T) {
+		ps, err := ResolveEnabledPrompts(Config{Disable: []string{"prompts:audit-contrast"}})
+		if err != nil {
+			t.Fatalf("ResolveEnabledPrompts: %v", err)
+		}
+		var hasAudit, hasMood bool
+		for _, p := range ps {
+			switch p.Name {
+			case "audit-contrast":
+				hasAudit = true
+			case "extract-from-mood":
+				hasMood = true
+			}
+		}
+		if hasAudit {
+			t.Errorf("audit-contrast should be disabled")
+		}
+		if !hasMood {
+			t.Errorf("extract-from-mood should remain enabled")
+		}
+	})
+
+	t.Run("mixed enable", func(t *testing.T) {
+		cfg := Config{Enable: []string{"color.convert", "prompts:extract-from-mood"}}
+		got, err := ResolveEnabled(cfg)
+		if err != nil {
+			t.Fatalf("ResolveEnabled: %v", err)
+		}
+		if len(got) != 1 || got[0].Name != "color.convert" {
+			t.Errorf("tools restricted to color.convert; got %v", got)
+		}
+		ps, err := ResolveEnabledPrompts(cfg)
+		if err != nil {
+			t.Fatalf("ResolveEnabledPrompts: %v", err)
+		}
+		if len(ps) != 1 || ps[0].Name != "extract-from-mood" {
+			t.Errorf("prompts restricted to extract-from-mood; got %v", ps)
+		}
+	})
+
+	t.Run("unknown kind errors", func(t *testing.T) {
+		if _, err := ResolveEnabled(Config{Enable: []string{"bogus:thing"}}); err == nil {
+			t.Errorf("expected error for unknown selector kind")
+		}
+	})
+
+	t.Run("unknown resource errors", func(t *testing.T) {
+		if _, err := ResolveEnabledResources(Config{Enable: []string{"resources:huetension://no-such"}}); err == nil {
+			t.Errorf("expected error for unknown resource URI")
+		}
+	})
+
+	t.Run("unknown prompt errors", func(t *testing.T) {
+		if _, err := ResolveEnabledPrompts(Config{Enable: []string{"prompts:no-such-prompt"}}); err == nil {
+			t.Errorf("expected error for unknown prompt name")
+		}
+	})
+
+	t.Run("resources targeted enable", func(t *testing.T) {
+		rs, err := ResolveEnabledResources(Config{Enable: []string{"resources:" + EnvelopeSchemaURI}})
+		if err != nil {
+			t.Fatalf("ResolveEnabledResources: %v", err)
+		}
+		if len(rs) != 1 || rs[0].URI != EnvelopeSchemaURI {
+			t.Errorf("resources should be restricted to envelope schema; got %v", rs)
+		}
+	})
+}

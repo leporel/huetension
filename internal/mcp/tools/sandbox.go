@@ -3,15 +3,19 @@ package tools
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
 )
 
 // Deps carries cross-cutting configuration the parent mcp package threads
 // into tool registrations. Most tools ignore it; image.* tools consume
-// ImageSandbox to gate filesystem and network access.
+// ImageSandbox to gate filesystem and network access. Logger, when
+// non-nil, can be used by tools to emit handler-internal events; nil is a
+// valid value (tools should fall back to a no-op rather than panicking).
 type Deps struct {
 	ImageSandbox ImageSandbox
+	Logger       *slog.Logger
 }
 
 // ImageSandbox enforces the security boundary around image.extract* tools.

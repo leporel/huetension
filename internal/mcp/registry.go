@@ -7,11 +7,14 @@
 //
 // Slices A–C wired the read-only color/palette/export tools. Slice D adds
 // image.extract / image.extractBatch behind a sandbox (ReadOnly, Root,
-// AllowHosts, MaxImageBytes) configured via Config.
+// AllowHosts, MaxImageBytes) configured via Config. Slice F.1+F.2 adds
+// MCP resources and prompts plus a namespaced --enable/--disable syntax
+// that selects across kinds.
 package mcp
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -124,11 +127,15 @@ type Config struct {
 	// passes the binary's --version-stamped value.
 	Version string
 
-	// Enable, when non-empty, restricts registration to the listed tool
-	// names. When empty, every tool with DefaultEnabled=true is included.
+	// Enable, when non-empty for a given kind, restricts registration of
+	// that kind to the listed names. Entries are namespaced — bare names
+	// ("color.convert") select tools for back-compat; "resources:..." and
+	// "prompts:..." select those kinds. "kind:*" matches everything in
+	// the kind.
 	Enable []string
 
 	// Disable is applied after Enable: any name listed here is dropped.
+	// Same namespaced syntax as Enable.
 	Disable []string
 
 	// ReadOnly forbids tools that touch the local filesystem with write or
@@ -177,41 +184,146 @@ type Config struct {
 	// HTTP/SSE responses (one per origin; "*" is supported). Empty list
 	// disables CORS handling entirely.
 	CORSOrigins []string
+
+	// LogLevel selects verbosity for the default JSON logger built when
+	// Logger is nil. Accepted values: "debug", "info", "warn", "error".
+	// Empty defaults to "info". Ignored when Logger is set explicitly.
+	LogLevel string
+
+	// Logger overrides the default logger. When nil, Build constructs a
+	// JSON logger writing to stderr at LogLevel. Tests and embedding hosts
+	// can pass their own logger to capture or re-route output. Stdio
+	// servers must avoid stdout — JSON-RPC owns it.
+	Logger *slog.Logger
 }
 
-// ResolveEnabled returns the descriptors that pass the enable/disable
+// kind labels a selector entry. Bare names (no prefix) are kindTool for
+// back-compat with --enable color.convert; everything else uses kind:name.
+type kind string
+
+const (
+	kindTool     kind = "tools"
+	kindResource kind = "resources"
+	kindPrompt   kind = "prompts"
+)
+
+// selectorSet groups parsed selector entries by kind. wildcards[k] is true
+// when the user wrote "k:*"; names[k] holds explicit names for that kind.
+// names is keyed by kind so a single helper can ResolveEnabled* without
+// caring which kinds exist.
+type selectorSet struct {
+	names     map[kind]map[string]struct{}
+	wildcards map[kind]bool
+}
+
+func (s selectorSet) hasAny(k kind) bool {
+	if s.wildcards[k] {
+		return true
+	}
+	return len(s.names[k]) > 0
+}
+
+func (s selectorSet) matches(k kind, name string) bool {
+	if s.wildcards[k] {
+		return true
+	}
+	_, ok := s.names[k][name]
+	return ok
+}
+
+// parseSelectors splits the namespaced selector list into per-kind sets.
+// Recognised prefixes: "tools:", "resources:", "prompts:". A bare entry
+// (no prefix) is treated as a tool name for back-compat with the older
+// --enable/--disable syntax that only knew about tools. Entries with an
+// unknown prefix produce an error so typos in --enable foo:bar fail loudly.
+//
+// Resource URIs (e.g. "huetension://schemas/v1") happen to contain ":";
+// the parser only strips a prefix when it matches one of the three known
+// kinds, so "resources:huetension://schemas/v1" parses to kind=resources,
+// name="huetension://schemas/v1".
+func parseSelectors(items []string) (selectorSet, error) {
+	out := selectorSet{
+		names:     map[kind]map[string]struct{}{},
+		wildcards: map[kind]bool{},
+	}
+	for _, raw := range items {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		k, name := splitSelector(raw)
+		if k == "" {
+			return selectorSet{}, fmt.Errorf("mcp: unknown selector kind in %q (want tools:, resources:, prompts:, or a bare tool name)", raw)
+		}
+		if name == "*" {
+			out.wildcards[k] = true
+			continue
+		}
+		if name == "" {
+			return selectorSet{}, fmt.Errorf("mcp: empty selector name in %q", raw)
+		}
+		if out.names[k] == nil {
+			out.names[k] = map[string]struct{}{}
+		}
+		out.names[k][name] = struct{}{}
+	}
+	return out, nil
+}
+
+func splitSelector(s string) (kind, string) {
+	for _, prefix := range []kind{kindTool, kindResource, kindPrompt} {
+		if rest, ok := strings.CutPrefix(s, string(prefix)+":"); ok {
+			return prefix, rest
+		}
+	}
+	if strings.Contains(s, ":") {
+		// Has a colon but no recognised kind prefix — only legitimate when
+		// it would have been a kind we know. Bare-name back-compat does not
+		// allow colons (tool names use "."), so reject loudly.
+		return "", ""
+	}
+	return kindTool, s
+}
+
+// validateNames asserts every explicit name in s for kind k exists in
+// known. Wildcards bypass validation. Used by ResolveEnabled* to catch
+// typos like --enable resources:no-such-uri.
+func validateNames(s selectorSet, k kind, known map[string]struct{}, label string) error {
+	for name := range s.names[k] {
+		if _, ok := known[name]; !ok {
+			return fmt.Errorf("mcp: unknown %s in --%s: %q", k, label, name)
+		}
+	}
+	return nil
+}
+
+// ResolveEnabled returns the tool descriptors that pass the enable/disable
 // filters in cfg. Order matches the catalogue order in All(). Returns an
 // error if cfg references an unknown tool — typos in --enable / --disable
 // should fail loudly rather than silently disable everything.
 func ResolveEnabled(cfg Config) ([]Descriptor, error) {
-	enable := normaliseSet(cfg.Enable)
-	disable := normaliseSet(cfg.Disable)
-
-	known := make(map[string]struct{}, len(allDescriptors))
-	for _, d := range allDescriptors {
-		known[d.Name] = struct{}{}
+	enable, disable, err := parseSelectorsBoth(cfg)
+	if err != nil {
+		return nil, err
 	}
-	for name := range enable {
-		if _, ok := known[name]; !ok {
-			return nil, fmt.Errorf("mcp: unknown tool in --enable: %q", name)
-		}
+	known := descriptorNames(allDescriptors)
+	if err := validateNames(enable, kindTool, known, "enable"); err != nil {
+		return nil, err
 	}
-	for name := range disable {
-		if _, ok := known[name]; !ok {
-			return nil, fmt.Errorf("mcp: unknown tool in --disable: %q", name)
-		}
+	if err := validateNames(disable, kindTool, known, "disable"); err != nil {
+		return nil, err
 	}
 
 	out := make([]Descriptor, 0, len(allDescriptors))
 	for _, d := range allDescriptors {
-		if len(enable) > 0 {
-			if _, ok := enable[d.Name]; !ok {
+		if enable.hasAny(kindTool) {
+			if !enable.matches(kindTool, d.Name) {
 				continue
 			}
 		} else if !d.DefaultEnabled {
 			continue
 		}
-		if _, blocked := disable[d.Name]; blocked {
+		if disable.matches(kindTool, d.Name) {
 			continue
 		}
 		out = append(out, d)
@@ -219,19 +331,25 @@ func ResolveEnabled(cfg Config) ([]Descriptor, error) {
 	return out, nil
 }
 
-// normaliseSet trims and lower-cases each entry. Empty strings (e.g. from a
-// stray comma) are dropped silently.
-func normaliseSet(names []string) map[string]struct{} {
-	if len(names) == 0 {
-		return nil
+// parseSelectorsBoth parses Enable and Disable in one go and returns both
+// sets. Centralised so ResolveEnabled / ResolveEnabledResources /
+// ResolveEnabledPrompts share the same validation pipeline.
+func parseSelectorsBoth(cfg Config) (selectorSet, selectorSet, error) {
+	enable, err := parseSelectors(cfg.Enable)
+	if err != nil {
+		return selectorSet{}, selectorSet{}, err
 	}
-	out := make(map[string]struct{}, len(names))
-	for _, n := range names {
-		n = strings.TrimSpace(n)
-		if n == "" {
-			continue
-		}
-		out[n] = struct{}{}
+	disable, err := parseSelectors(cfg.Disable)
+	if err != nil {
+		return selectorSet{}, selectorSet{}, err
+	}
+	return enable, disable, nil
+}
+
+func descriptorNames(in []Descriptor) map[string]struct{} {
+	out := make(map[string]struct{}, len(in))
+	for _, d := range in {
+		out[d.Name] = struct{}{}
 	}
 	return out
 }

@@ -74,3 +74,50 @@ func TestMCPRejectsUnknownToolInEnable(t *testing.T) {
 		t.Errorf("expected error for unknown tool in --enable")
 	}
 }
+
+// TestMCPRejectsLooseRootOnNetworkTransport pins the foot-gun guard:
+// running HTTP/SSE with the operator clearing --read-only=false but
+// leaving --root at the default "." should refuse to start. The auto-
+// defaults would have flipped ReadOnly back on, so this only triggers
+// when the operator explicitly takes the safety off.
+func TestMCPRejectsLooseRootOnNetworkTransport(t *testing.T) {
+	cmd := newMCPCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		"--transport", "http",
+		"--address", "127.0.0.1:0",
+		"--read-only=false",
+	})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected refusal when --read-only=false without explicit --root")
+	}
+	if !strings.Contains(err.Error(), "--root") {
+		t.Errorf("error %q should mention --root", err)
+	}
+}
+
+// TestMCPAcceptsLooseRootWhenPinned verifies the same combination is
+// accepted once the operator pins --root explicitly. We use --list-tools
+// to short-circuit before the listener opens — this test is about
+// pre-flight validation order, not transport behaviour.
+func TestMCPAcceptsLooseRootWhenPinned(t *testing.T) {
+	stdout := withStdoutBuffer(t)
+	cmd := newMCPCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		"--transport", "http",
+		"--address", "127.0.0.1:0",
+		"--read-only=false",
+		"--root", t.TempDir(),
+		"--list-tools",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if stdout.Len() == 0 {
+		t.Errorf("expected --list-tools output, got empty")
+	}
+}

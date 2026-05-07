@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -27,7 +28,7 @@ const httpShutdownGrace = 5 * time.Second
 //   - cfg.Address is non-loopback AND cfg.AuthToken is empty (mitigates
 //     accidental public exposure of an LLM-driven server).
 //   - cfg.Address is empty (no implicit default — caller must pass one).
-func runHTTP(ctx context.Context, srv *sdk.Server, cfg Config, sse bool) error {
+func runHTTP(ctx context.Context, srv *sdk.Server, logger *slog.Logger, cfg Config, sse bool) error {
 	if strings.TrimSpace(cfg.Address) == "" {
 		return errors.New("mcp: http transport requires --address")
 	}
@@ -54,9 +55,15 @@ func runHTTP(ctx context.Context, srv *sdk.Server, cfg Config, sse bool) error {
 		mux.Handle(base+"/", h)
 	}
 
+	// Order matters: access log wraps everything (so it sees the final
+	// status set by auth/CORS too), then bearer auth (gates before CORS
+	// is reached), then CORS innermost so OPTIONS are answered with the
+	// proper headers. Wrapping order in code is reversed because each
+	// step composes the *next* handler.
 	var handler http.Handler = mux
 	handler = withCORS(cfg.CORSOrigins, handler)
 	handler = withBearerAuth(cfg.AuthToken, handler)
+	handler = withAccessLog(logger, handler)
 
 	httpSrv := &http.Server{
 		Addr:              cfg.Address,

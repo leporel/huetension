@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "huetension://schemas/v1",
+  "title": "huetension/v1 envelope",
+  "description": "Wire contract used by every huetension tool result. The CLI's --format json mode and the MCP server emit identical envelopes.",
+  "type": "object",
+  "required": ["schema", "result"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "huetension/v1",
+      "description": "Wire-contract version. Bumping is a coordination event between CLI, MCP, and any client that parses huetension output."
+    },
+    "tool": {
+      "type": "string",
+      "description": "Optional. Set by CLI/MCP to the name of the entry point that produced this envelope (e.g. 'extract', 'harmony.generate'). Library callers omit it."
+    },
+    "params": {
+      "type": "object",
+      "description": "Optional. The parameters the tool was invoked with. Shape mirrors the tool's input schema; consumers should not assume a fixed structure across tools.",
+      "additionalProperties": true
+    },
+    "result": {
+      "type": "object",
+      "description": "Tool-specific result. Palette-producing tools populate `palette` and `metadata`; non-palette tools (e.g. contrast.check) carry their own fields directly.",
+      "additionalProperties": true,
+      "properties": {
+        "palette": { "$ref": "#/$defs/palette" },
+        "metadata": { "$ref": "#/$defs/metadata" }
+      }
+    }
+  },
+  "$defs": {
+    "palette": {
+      "type": "object",
+      "required": ["size", "colors"],
+      "additionalProperties": false,
+      "properties": {
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of colors in the palette."
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional palette name. Empty when omitted."
+        },
+        "colors": {
+          "type": "array",
+          "description": "Colors in canonical order.",
+          "items": { "$ref": "#/$defs/color" }
+        },
+        "metadata": { "$ref": "#/$defs/metadata" }
+      }
+    },
+    "color": {
+      "type": "object",
+      "required": ["hex", "rgb", "hsl", "oklch"],
+      "additionalProperties": false,
+      "properties": {
+        "hex": {
+          "type": "string",
+          "pattern": "^#[0-9a-f]{6}$",
+          "description": "Canonical hex (#rrggbb), lower-case."
+        },
+        "rgb": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+          "description": "sRGB 8-bit channels [r, g, b]."
+        },
+        "hsl": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "integer" },
+          "description": "HSL [hue °, saturation %, lightness %]."
+        },
+        "oklch": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "integer" },
+          "description": "OkLCH [lightness %, chroma %, hue °]."
+        },
+        "freq": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Frequency 0..1, populated for extracted palettes."
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Provenance metadata recorded by the producer. All fields optional; structure is permissive to allow tools to record their own params and stats.",
+      "additionalProperties": true,
+      "properties": {
+        "source": { "type": "string" },
+        "method": { "type": "string" },
+        "params": { "type": "object", "additionalProperties": true },
+        "imageInfo": { "type": "object", "additionalProperties": true },
+        "stats": { "type": "object", "additionalProperties": true },
+        "generatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

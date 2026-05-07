@@ -54,11 +54,11 @@ func newMCPCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringSliceVar(&mf.transports, "transport", []string{"stdio"}, "comma-separated transports: stdio|http|sse|all")
-	cmd.Flags().StringSliceVar(&mf.enable, "enable", nil, "comma-separated whitelist of tool names; overrides default-enabled set")
-	cmd.Flags().StringSliceVar(&mf.disable, "disable", nil, "comma-separated blacklist of tool names; applied after --enable")
+	cmd.Flags().StringSliceVar(&mf.enable, "enable", nil, "comma-separated whitelist; bare names target tools, prefix with resources: or prompts: for those kinds, kind:* for wildcards")
+	cmd.Flags().StringSliceVar(&mf.disable, "disable", nil, "comma-separated blacklist; same namespaced syntax as --enable; applied after --enable")
 	cmd.Flags().BoolVar(&mf.listTools, "list-tools", false, "print the registered tool catalogue and exit")
 	cmd.Flags().StringVar(&mf.listFmt, "list-format", "text", "format for --list-tools output (text|json)")
-	cmd.Flags().StringVar(&mf.logLevel, "log-level", "info", "log level (debug|info|warn|error) — reserved for later slices")
+	cmd.Flags().StringVar(&mf.logLevel, "log-level", "info", "log level (debug|info|warn|error); JSON-formatted output goes to stderr")
 
 	cmd.Flags().BoolVar(&mf.readOnly, "read-only", false, "reject image.extract path inputs (URL/data still allowed); auto-on for http/sse transports")
 	cmd.Flags().StringVar(&mf.root, "root", ".", "directory below which image.extract path inputs must resolve; empty disables filesystem access")
@@ -79,14 +79,7 @@ func newMCPCmd() *cobra.Command {
 // still override by passing --read-only=false (etc.) — Cobra's
 // Flag.Changed lets us distinguish "left at default" from "explicitly set".
 func applyAutoDefaults(cmd *cobra.Command, mf *mcpFlags) {
-	hasNetwork := false
-	for _, t := range mf.transports {
-		switch strings.ToLower(strings.TrimSpace(t)) {
-		case "http", "sse", "all":
-			hasNetwork = true
-		}
-	}
-	if !hasNetwork {
+	if !hasNetworkTransport(mf.transports) {
 		return
 	}
 	if !cmd.Flags().Changed("read-only") {
@@ -97,8 +90,40 @@ func applyAutoDefaults(cmd *cobra.Command, mf *mcpFlags) {
 	}
 }
 
+func hasNetworkTransport(transports []string) bool {
+	for _, t := range transports {
+		switch strings.ToLower(strings.TrimSpace(t)) {
+		case "http", "sse", "all":
+			return true
+		}
+	}
+	return false
+}
+
+// validateRootSandbox refuses to start when an operator runs a network
+// transport with --read-only=false but never pinned --root. The default
+// "." (cwd) is too broad to be a sandbox — the auto-defaults would have
+// set ReadOnly=true had the operator not explicitly cleared it, so this
+// path is reached only when --read-only=false was passed by hand. We
+// catch that case rather than silently exposing the cwd to the network.
+func validateRootSandbox(cmd *cobra.Command, mf *mcpFlags) error {
+	if !hasNetworkTransport(mf.transports) {
+		return nil
+	}
+	if mf.readOnly {
+		return nil
+	}
+	if cmd.Flags().Changed("root") {
+		return nil
+	}
+	return fmt.Errorf("refusing to start: --read-only=false on a network transport requires an explicit --root pinning the sandbox directory; %q (cwd) is too broad", mf.root)
+}
+
 func runMCP(cmd *cobra.Command, mf *mcpFlags) error {
 	applyAutoDefaults(cmd, mf)
+	if err := validateRootSandbox(cmd, mf); err != nil {
+		return err
+	}
 
 	cfg := huemcp.Config{
 		Version:              version,
@@ -114,6 +139,7 @@ func runMCP(cmd *cobra.Command, mf *mcpFlags) error {
 		BasePath:             mf.basePath,
 		AuthToken:            mf.authToken,
 		CORSOrigins:          mf.corsOrigins,
+		LogLevel:             mf.logLevel,
 	}
 
 	if mf.listTools {

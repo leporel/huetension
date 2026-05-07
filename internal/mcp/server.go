@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -16,7 +17,7 @@ const implementationName = "huetension"
 
 // depsFromConfig converts the public Config into the tools.Deps each tool
 // register sees. Centralised so the mapping is in one place.
-func depsFromConfig(cfg Config) tools.Deps {
+func depsFromConfig(cfg Config, logger *slog.Logger) tools.Deps {
 	return tools.Deps{
 		ImageSandbox: tools.ImageSandbox{
 			ReadOnly:             cfg.ReadOnly,
@@ -25,33 +26,56 @@ func depsFromConfig(cfg Config) tools.Deps {
 			MaxImageBytes:        cfg.MaxImageBytes,
 			BlockPrivateNetworks: cfg.BlockPrivateNetworks,
 		},
+		Logger: logger,
 	}
 }
 
 // Build constructs an *sdk.Server with every tool that survives the cfg
-// enable/disable filter registered. It does not run the server.
+// enable/disable filter registered. It does not run the server. The
+// returned logger is the one bound to the server's receiving middleware
+// — runHTTP shares it so stdio and HTTP emit logs through the same sink.
 //
 // Exposed for tests that drive the server through an in-memory transport.
 func Build(cfg Config) (*sdk.Server, []Descriptor, error) {
+	srv, _, enabled, err := buildWithLogger(cfg)
+	return srv, enabled, err
+}
+
+// buildWithLogger is the internal Build path that also returns the
+// resolved logger. Splitting it out lets transport code (runHTTP) reuse
+// the same logger instance without re-resolving — keeping the access log
+// and the SDK middleware on a single sink.
+func buildWithLogger(cfg Config) (*sdk.Server, *slog.Logger, []Descriptor, error) {
+	logger, err := resolveLogger(cfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	enabled, err := ResolveEnabled(cfg)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	srv := sdk.NewServer(&sdk.Implementation{
 		Name:    implementationName,
 		Version: cfg.Version,
 	}, nil)
-	deps := depsFromConfig(cfg)
+	srv.AddReceivingMiddleware(loggingMiddleware(logger))
+	deps := depsFromConfig(cfg, logger)
 	for _, d := range enabled {
 		d.register(srv, deps)
 	}
-	return srv, enabled, nil
+	if err := registerResources(srv, cfg); err != nil {
+		return nil, nil, nil, err
+	}
+	if err := registerPrompts(srv, cfg); err != nil {
+		return nil, nil, nil, err
+	}
+	return srv, logger, enabled, nil
 }
 
 // RunStdio builds the server per cfg and serves it over stdin/stdout until
 // the client disconnects or ctx is cancelled.
 func RunStdio(ctx context.Context, cfg Config) error {
-	srv, _, err := Build(cfg)
+	srv, _, _, err := buildWithLogger(cfg)
 	if err != nil {
 		return err
 	}
@@ -73,14 +97,14 @@ func Run(ctx context.Context, cfg Config) error {
 		tlist = []string{"stdio"}
 	}
 
-	srv, _, err := Build(cfg)
+	srv, logger, _, err := buildWithLogger(cfg)
 	if err != nil {
 		return err
 	}
 
 	// Single transport — call directly, no goroutines / channel plumbing.
 	if len(tlist) == 1 {
-		return runTransport(ctx, srv, cfg, tlist[0])
+		return runTransport(ctx, srv, logger, cfg, tlist[0])
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -89,7 +113,7 @@ func Run(ctx context.Context, cfg Config) error {
 	errCh := make(chan error, len(tlist))
 	for _, t := range tlist {
 		go func() {
-			errCh <- runTransport(ctx, srv, cfg, t)
+			errCh <- runTransport(ctx, srv, logger, cfg, t)
 		}()
 	}
 
@@ -106,7 +130,7 @@ func Run(ctx context.Context, cfg Config) error {
 	return firstErr
 }
 
-func runTransport(ctx context.Context, srv *sdk.Server, cfg Config, transport string) error {
+func runTransport(ctx context.Context, srv *sdk.Server, logger *slog.Logger, cfg Config, transport string) error {
 	switch transport {
 	case "stdio":
 		if err := srv.Run(ctx, &sdk.StdioTransport{}); err != nil {
@@ -114,9 +138,9 @@ func runTransport(ctx context.Context, srv *sdk.Server, cfg Config, transport st
 		}
 		return nil
 	case "http":
-		return runHTTP(ctx, srv, cfg, false)
+		return runHTTP(ctx, srv, logger, cfg, false)
 	case "sse":
-		return runHTTP(ctx, srv, cfg, true)
+		return runHTTP(ctx, srv, logger, cfg, true)
 	}
 	return fmt.Errorf("mcp: unknown transport %q", transport)
 }
