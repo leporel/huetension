@@ -81,6 +81,12 @@ type Options struct {
 	// the JSON envelope's `params` field. Library callers leave it nil;
 	// CLI/MCP populate it so consumers can replay the call exactly.
 	Params map[string]any
+
+	// TailwindShades, when > 0, expands each input color into a shade scale
+	// of this many monochromatic variants (instead of the flat one-row-per-
+	// input shape). 5 → 100/300/500/700/900; 10 → 50/100/200..900; any other
+	// N → linear 100..N00. Ignored for non-tailwind formats.
+	TailwindShades int
 }
 
 const (
@@ -114,7 +120,7 @@ func Export(p *palette.Palette, format Format, opts Options) ([]byte, error) {
 	case FormatLESS:
 		return renderLESS(p, opts), nil
 	case FormatTailwind:
-		return renderTailwind(p, opts), nil
+		return renderTailwind(p, opts)
 	case FormatPlain:
 		return renderPlain(p), nil
 	case FormatGPL:

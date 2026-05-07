@@ -80,6 +80,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newRandomCmd())
 	root.AddCommand(newCSSCmd())
 	root.AddCommand(newTailwindCmd())
+	root.AddCommand(newMCPCmd())
 	root.AddCommand(newCompletionCmd())
 	root.AddCommand(newVersionCmd())
 	return root

@@ -207,6 +207,15 @@ func loadURL(rawURL string, opts LoadOptions) (image.Image, string, error) {
 }
 
 func checkHost(rawURL string, allowed []string) error {
+	return CheckHost(rawURL, allowed)
+}
+
+// CheckHost validates rawURL's host against the allowed patterns. Patterns
+// may be a literal hostname or a "*.suffix" form. Returns nil on a match,
+// or an error naming the offending host. Exposed so the MCP layer can
+// re-apply this check on HTTP redirects (the SDK redirect handler runs
+// after loadURL's initial gate).
+func CheckHost(rawURL string, allowed []string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return err

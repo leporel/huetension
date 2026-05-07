@@ -1,9 +1,7 @@
 package cli
 
 import (
-	"bytes"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -11,7 +9,6 @@ import (
 
 	"github.com/leporel/huetension/internal/color"
 	"github.com/leporel/huetension/internal/exporter"
-	"github.com/leporel/huetension/internal/harmony"
 	"github.com/leporel/huetension/internal/palette"
 )
 
@@ -63,38 +60,33 @@ func runTailwind(args []string, tf *tailwindFlags) error {
 		colors = append(colors, c)
 	}
 
-	mode := strings.ToLower(strings.TrimSpace(tf.shades))
-	if mode == "" || mode == "none" {
-		// Flat shape — defer to the existing exporter path.
-		p := palette.New(colors)
-		p.Name = tf.name
-		data, err := exporter.Export(p, exporter.FormatTailwind, exporter.Options{
-			Prefix: tf.name,
-			Name:   tf.name,
-		})
-		if err != nil {
-			return err
-		}
-		return writeOutput(tf.output, data)
-	}
-
-	count, err := parseShadeCount(mode)
+	shadeCount, err := parseShadeCount(tf.shades)
 	if err != nil {
 		return err
 	}
-	stops := tailwindShadeStops(count)
 
-	data, err := renderTailwindWithShades(colors, tf.name, stops)
+	p := palette.New(colors)
+	p.Name = tf.name
+	data, err := exporter.Export(p, exporter.FormatTailwind, exporter.Options{
+		Prefix:         tf.name,
+		Name:           tf.name,
+		TailwindShades: shadeCount,
+	})
 	if err != nil {
 		return err
 	}
 	return writeOutput(tf.output, data)
 }
 
-// parseShadeCount maps the --shades user input to a positive integer count.
-// "auto" maps to 10 (matching Tailwind's standard 50/100..900 scale plus 950).
+// parseShadeCount maps the --shades user input to the integer count consumed
+// by exporter.Options.TailwindShades. "none" or "" → 0 (flat); "auto" → 10;
+// any positive integer → itself.
 func parseShadeCount(mode string) (int, error) {
-	if mode == "auto" {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	switch mode {
+	case "", "none":
+		return 0, nil
+	case "auto":
 		return 10, nil
 	}
 	n, err := strconv.Atoi(mode)
@@ -102,73 +94,4 @@ func parseShadeCount(mode string) (int, error) {
 		return 0, fmt.Errorf("invalid --shades %q (want none|auto|5|10|N)", mode)
 	}
 	return n, nil
-}
-
-// tailwindShadeStops returns the numeric labels for a given count. We
-// hard-code the canonical scales for 5 and 10 because those are the values
-// designers actually expect; any other count falls back to a linear 100..N00
-// spread which is unambiguous if not idiomatic.
-func tailwindShadeStops(count int) []int {
-	switch count {
-	case 5:
-		return []int{100, 300, 500, 700, 900}
-	case 10:
-		return []int{50, 100, 200, 300, 400, 500, 600, 700, 800, 900}
-	}
-	stops := make([]int, count)
-	for i := range count {
-		stops[i] = (i + 1) * 100
-	}
-	return stops
-}
-
-// renderTailwindWithShades walks each input, generates `len(stops)`
-// monochromatic variants around the input's lightness, and emits the
-// Tailwind nested-shape JS object.
-func renderTailwindWithShades(colors []color.Color, prefix string, stops []int) ([]byte, error) {
-	count := len(stops)
-	type group struct {
-		name   string
-		shades map[int]string
-	}
-	groups := make([]group, len(colors))
-
-	for i, base := range colors {
-		variants, err := harmony.Generate(harmony.Monochromatic, base, harmony.Options{Count: count})
-		if err != nil {
-			return nil, fmt.Errorf("color %d: %w", i+1, err)
-		}
-		// Monochromatic returns light→dark via lightness sweep around base.
-		// Sort by lightness so 50 = lightest, 900 = darkest, mirroring the
-		// Tailwind convention that 950 should be the darkest of the lot.
-		sort.SliceStable(variants, func(a, b int) bool {
-			return variants[a].Lightness() > variants[b].Lightness()
-		})
-		shadeMap := make(map[int]string, count)
-		for j, v := range variants {
-			shadeMap[stops[j]] = v.Hex()
-		}
-		groups[i] = group{
-			name:   fmt.Sprintf("%s-%d", prefix, i+1),
-			shades: shadeMap,
-		}
-	}
-
-	var buf bytes.Buffer
-	buf.WriteString("module.exports = {\n")
-	for _, g := range groups {
-		fmt.Fprintf(&buf, "  %q: {\n", g.name)
-		// Stable iteration order for deterministic output.
-		keys := make([]int, 0, len(g.shades))
-		for k := range g.shades {
-			keys = append(keys, k)
-		}
-		sort.Ints(keys)
-		for _, k := range keys {
-			fmt.Fprintf(&buf, "    %q: %q,\n", strconv.Itoa(k), g.shades[k])
-		}
-		buf.WriteString("  },\n")
-	}
-	buf.WriteString("};\n")
-	return buf.Bytes(), nil
 }

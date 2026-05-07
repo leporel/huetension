@@ -1,0 +1,165 @@
+package cli
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	huemcp "github.com/leporel/huetension/internal/mcp"
+)
+
+// mcpFlags collects the `huetension mcp` subcommand flags.
+//
+// Auto-default rules (applied when the flag is not explicitly set on the
+// command line) live in applyAutoDefaults — chiefly: HTTP/SSE transports
+// flip ReadOnly and BlockPrivateNetworks on by default, because exposing
+// filesystem access or letting an LLM SSRF the local network through a
+// public-facing MCP server is the obvious mistake to prevent.
+type mcpFlags struct {
+	transports           []string
+	enable               []string
+	disable              []string
+	listTools            bool
+	listFmt              string
+	logLevel             string
+	readOnly             bool
+	root                 string
+	allowHosts           []string
+	maxImageBytes        int64
+	blockPrivateNetworks bool
+	address              string
+	basePath             string
+	authToken            string
+	corsOrigins          []string
+}
+
+func newMCPCmd() *cobra.Command {
+	var mf mcpFlags
+
+	cmd := &cobra.Command{
+		Use:   "mcp",
+		Short: "Run huetension as a Model Context Protocol server",
+		Long: "Run huetension as an MCP server. The server speaks the same JSON wire contract as the CLI's --format json mode, " +
+			"so anything an LLM extracts from a tool result lines up with what the CLI would emit.\n\n" +
+			"Transports: stdio (default; child-process MCP for Claude Desktop / editors), http (modern streamable, recommended for remote use), sse (legacy server-sent events). " +
+			"Pass --transport stdio,http or --transport all to run multiple concurrently.\n\n" +
+			"For HTTP/SSE the server refuses to bind a non-loopback address without --auth-token, and ReadOnly + BlockPrivateNetworks default to true. " +
+			"Pin --root, --allow-host, --max-image-bytes when exposing the server beyond localhost.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runMCP(cmd, &mf)
+		},
+	}
+
+	cmd.Flags().StringSliceVar(&mf.transports, "transport", []string{"stdio"}, "comma-separated transports: stdio|http|sse|all")
+	cmd.Flags().StringSliceVar(&mf.enable, "enable", nil, "comma-separated whitelist of tool names; overrides default-enabled set")
+	cmd.Flags().StringSliceVar(&mf.disable, "disable", nil, "comma-separated blacklist of tool names; applied after --enable")
+	cmd.Flags().BoolVar(&mf.listTools, "list-tools", false, "print the registered tool catalogue and exit")
+	cmd.Flags().StringVar(&mf.listFmt, "list-format", "text", "format for --list-tools output (text|json)")
+	cmd.Flags().StringVar(&mf.logLevel, "log-level", "info", "log level (debug|info|warn|error) — reserved for later slices")
+
+	cmd.Flags().BoolVar(&mf.readOnly, "read-only", false, "reject image.extract path inputs (URL/data still allowed); auto-on for http/sse transports")
+	cmd.Flags().StringVar(&mf.root, "root", ".", "directory below which image.extract path inputs must resolve; empty disables filesystem access")
+	cmd.Flags().StringSliceVar(&mf.allowHosts, "allow-host", nil, "host allowlist for image.extract URL fetches (e.g. '*.unsplash.com'); empty allows all")
+	cmd.Flags().Int64Var(&mf.maxImageBytes, "max-image-bytes", 0, "cap on image bytes (URL body or decoded base64); 0 → 64 MiB")
+	cmd.Flags().BoolVar(&mf.blockPrivateNetworks, "block-private-networks", false, "refuse outbound connections to loopback/private/link-local IPs in image.extract; auto-on for http/sse transports")
+
+	cmd.Flags().StringVar(&mf.address, "address", ":7337", "listen address for http/sse transports")
+	cmd.Flags().StringVar(&mf.basePath, "base-path", "/mcp", "URL prefix for the streamable HTTP handler (sse mounts at base-path/sse)")
+	cmd.Flags().StringVar(&mf.authToken, "auth-token", "", "Bearer token required for http/sse requests; mandatory when binding non-loopback")
+	cmd.Flags().StringSliceVar(&mf.corsOrigins, "cors", nil, "Access-Control-Allow-Origin values for http/sse responses ('*' or explicit origins); empty disables CORS")
+
+	return cmd
+}
+
+// applyAutoDefaults flips security-relevant defaults to safer values when
+// the operator runs HTTP/SSE without explicitly opting out. The user can
+// still override by passing --read-only=false (etc.) — Cobra's
+// Flag.Changed lets us distinguish "left at default" from "explicitly set".
+func applyAutoDefaults(cmd *cobra.Command, mf *mcpFlags) {
+	hasNetwork := false
+	for _, t := range mf.transports {
+		switch strings.ToLower(strings.TrimSpace(t)) {
+		case "http", "sse", "all":
+			hasNetwork = true
+		}
+	}
+	if !hasNetwork {
+		return
+	}
+	if !cmd.Flags().Changed("read-only") {
+		mf.readOnly = true
+	}
+	if !cmd.Flags().Changed("block-private-networks") {
+		mf.blockPrivateNetworks = true
+	}
+}
+
+func runMCP(cmd *cobra.Command, mf *mcpFlags) error {
+	applyAutoDefaults(cmd, mf)
+
+	cfg := huemcp.Config{
+		Version:              version,
+		Enable:               mf.enable,
+		Disable:              mf.disable,
+		ReadOnly:             mf.readOnly,
+		Root:                 mf.root,
+		AllowHosts:           mf.allowHosts,
+		MaxImageBytes:        mf.maxImageBytes,
+		BlockPrivateNetworks: mf.blockPrivateNetworks,
+		Transports:           mf.transports,
+		Address:              mf.address,
+		BasePath:             mf.basePath,
+		AuthToken:            mf.authToken,
+		CORSOrigins:          mf.corsOrigins,
+	}
+
+	if mf.listTools {
+		enabled, err := huemcp.ResolveEnabled(cfg)
+		if err != nil {
+			return err
+		}
+		return printToolList(enabled, mf.listFmt)
+	}
+
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return huemcp.Run(ctx, cfg)
+}
+
+// printToolList writes the catalogue to stdoutWriter (which tests swap for
+// a buffer). JSON form mirrors the shape sketched in .prompts/01-phase2-mcp.md
+// so MCP clients can parse it directly.
+func printToolList(tools []huemcp.Descriptor, format string) error {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "", "text":
+		var b strings.Builder
+		for _, d := range tools {
+			fmt.Fprintf(&b, "%-30s %s\n", d.Name, d.Description)
+		}
+		_, err := fmt.Fprint(stdoutWriter, b.String())
+		return err
+	case "json":
+		type entry struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Enabled     bool   `json:"enabled"`
+		}
+		out := make([]entry, len(tools))
+		for i, d := range tools {
+			out[i] = entry{Name: d.Name, Description: d.Description, Enabled: true}
+		}
+		data, err := json.MarshalIndent(out, "", "  ")
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(stdoutWriter, string(data))
+		return err
+	default:
+		return fmt.Errorf("unknown --list-format %q (want text|json)", format)
+	}
+}
