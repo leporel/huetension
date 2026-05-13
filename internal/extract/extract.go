@@ -94,16 +94,34 @@ type Options struct {
 	// 0 (default) keeps every pixel.
 	AlphaMaskThreshold uint8
 
-	// MinSaturation pre-filters pixels by HSL saturation. Soft and SoftK mode only.
-	// 0 = no filter.
-	MinSaturation float64
-	// MinLightness pre-filters pixels too dark. Soft and SoftK mode only.
-	MinLightness float64
-	// MaxLightness pre-filters pixels too bright. Soft and SoftK mode only.
-	MaxLightness float64
 	// MergeEpsilon — Lab ΔE76 distance below which two clusters are merged.
 	// Soft mode only. 0 falls back to defaultSoftMergeEpsilon.
 	MergeEpsilon float64
+
+	// SoftPreset — Kuler-like mood preset for Soft/SoftK. Empty string is
+	// treated as SoftPresetDefault — the soft pipeline always runs the
+	// perceptual (OkLCH chroma + OkL) filter and ranking.
+	SoftPreset SoftPreset
+
+	// Perceptual filter bounds, used when SoftPreset is set. Zero means
+	// "no bound" — applyDefaults fills these from the preset mapping for
+	// any field left zero by the caller, so explicit values override the
+	// preset (CLI precedence: preset is the base, explicit knobs win).
+	MinOkL    float64 // 0..1, perceptual lightness floor
+	MaxOkL    float64 // 0..1, perceptual lightness ceiling
+	MinChroma float64 // 0..~0.4, OkLCH chroma floor
+	MaxChroma float64 // 0..~0.4, OkLCH chroma ceiling (0 = no ceiling)
+
+	// Ranking weights for Soft/SoftK applied to OkLCH chroma. Zero falls
+	// back to the package defaults (softSaturationBias,
+	// softSaturationExponent) — the preset mapping fills these in via
+	// applyDefaults, but advanced callers can override.
+	RankSaturationBias     float64
+	RankSaturationExponent float64
+	// RankOkLPreference in [-1, +1]; +1 favours lighter colors, -1 favours
+	// darker. Multiplies the rank weight by (1 + pref·(2·OkL−1)). 0 is
+	// neutral.
+	RankOkLPreference float64
 
 	// SortBy applies a final sort to the produced palette. "" = no sort.
 	SortBy palette.SortBy
@@ -113,11 +131,8 @@ type Options struct {
 
 // Defaults applied to a zero-value Options before extraction.
 const (
-	defaultPaletteSize  = 5
-	defaultResize       = 512
-	defaultSoftMinSat   = 0.05
-	defaultSoftMinLight = 0.05
-	defaultSoftMaxLight = 0.95
+	defaultPaletteSize = 5
+	defaultResize      = 512
 
 	maxPaletteSize = 32
 
@@ -185,6 +200,7 @@ func Extract(ctx context.Context, img image.Image, opts Options) (*palette.Palet
 
 	var colors []color.Color
 	var err error
+	var fellBack bool
 	switch opts.Method {
 	case MethodKMeans:
 		colors, err = extractKMeans(pixels, opts.PaletteSize)
@@ -193,9 +209,9 @@ func Extract(ctx context.Context, img image.Image, opts Options) (*palette.Palet
 	case MethodMedianCut:
 		colors = extractMedianCut(pixels, opts.PaletteSize)
 	case MethodSoft:
-		colors, err = extractSoft(pixels, opts.PaletteSize, opts)
+		colors, fellBack, err = extractSoft(pixels, opts.PaletteSize, opts)
 	case MethodSoftK:
-		colors, err = extractSoftK(pixels, opts.PaletteSize, opts)
+		colors, fellBack, err = extractSoftK(pixels, opts.PaletteSize, opts)
 	case MethodOctree:
 		colors = extractOctree(pixels, opts.PaletteSize)
 	case MethodPopularity:
@@ -219,7 +235,7 @@ func Extract(ctx context.Context, img image.Image, opts Options) (*palette.Palet
 	p := palette.New(colors)
 	p.Metadata = palette.Metadata{
 		Method: string(opts.Method),
-		Params: extractParams(opts),
+		Params: extractParams(opts, fellBack),
 		ImageInfo: &palette.ImageInfo{
 			OriginalSize:  [2]int{originalBounds.Dx(), originalBounds.Dy()},
 			ProcessedSize: [2]int{processedBounds.Dx(), processedBounds.Dy()},
@@ -325,19 +341,43 @@ func applyDefaults(opts Options) Options {
 	if opts.MergeEpsilon == 0 {
 		opts.MergeEpsilon = defaultSoftMergeEpsilon
 	}
-	if opts.MinSaturation == 0 && (opts.Method == MethodSoft || opts.Method == MethodSoftK) {
-		opts.MinSaturation = defaultSoftMinSat
-	}
-	if opts.MinLightness == 0 && (opts.Method == MethodSoft || opts.Method == MethodSoftK) {
-		opts.MinLightness = defaultSoftMinLight
-	}
-	if opts.MaxLightness == 0 && (opts.Method == MethodSoft || opts.Method == MethodSoftK) {
-		opts.MaxLightness = defaultSoftMaxLight
+
+	if opts.Method == MethodSoft || opts.Method == MethodSoftK {
+		// Preset is the sole filter/ranking driver for the soft pipeline.
+		// Empty SoftPreset is normalised to SoftPresetDefault so behaviour
+		// is well-defined for any zero-value Options. Explicit knobs win
+		// over preset values: applyDefaults only fills fields the caller
+		// left at zero.
+		if opts.SoftPreset == "" {
+			opts.SoftPreset = SoftPresetDefault
+		}
+		t := softPresetMapping(opts.SoftPreset)
+		if opts.MinOkL == 0 {
+			opts.MinOkL = t.MinOkL
+		}
+		if opts.MaxOkL == 0 {
+			opts.MaxOkL = t.MaxOkL
+		}
+		if opts.MinChroma == 0 {
+			opts.MinChroma = t.MinChroma
+		}
+		if opts.MaxChroma == 0 {
+			opts.MaxChroma = t.MaxChroma
+		}
+		if opts.RankSaturationBias == 0 {
+			opts.RankSaturationBias = t.SaturationBias
+		}
+		if opts.RankSaturationExponent == 0 {
+			opts.RankSaturationExponent = t.SaturationExponent
+		}
+		if opts.RankOkLPreference == 0 {
+			opts.RankOkLPreference = t.OkLPreference
+		}
 	}
 	return opts
 }
 
-func extractParams(opts Options) map[string]any {
+func extractParams(opts Options, fellBack bool) map[string]any {
 	p := map[string]any{
 		"method":       string(opts.Method),
 		"palette_size": opts.PaletteSize,
@@ -347,9 +387,17 @@ func extractParams(opts Options) map[string]any {
 		p["alpha_mask_threshold"] = int(opts.AlphaMaskThreshold)
 	}
 	if opts.Method == MethodSoft || opts.Method == MethodSoftK {
-		p["min_saturation"] = opts.MinSaturation
-		p["min_lightness"] = opts.MinLightness
-		p["max_lightness"] = opts.MaxLightness
+		p["soft_preset"] = string(opts.SoftPreset)
+		p["preset_effective"] = !fellBack
+		if fellBack {
+			p["preset_fallback"] = "insufficient_pixels"
+		}
+		p["min_okl"] = opts.MinOkL
+		p["max_okl"] = opts.MaxOkL
+		p["min_chroma"] = opts.MinChroma
+		if opts.MaxChroma > 0 {
+			p["max_chroma"] = opts.MaxChroma
+		}
 		if opts.Method == MethodSoft {
 			p["merge_epsilon"] = opts.MergeEpsilon
 		}

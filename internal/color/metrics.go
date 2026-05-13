@@ -63,3 +63,11 @@ func (c Color) ToOkLCH() (L, C, H float64) {
 	_, C, H = okLabToLCH(L, a, b)
 	return L, C, H
 }
+
+// OkChroma returns the C component of OkLCH (perceptual chroma, ~0..0.4).
+// Useful as a perceptual replacement for HSL saturation in ranking and
+// filtering.
+func (c Color) OkChroma() float64 {
+	_, C, _ := c.ToOkLCH()
+	return C
+}

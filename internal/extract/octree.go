@@ -1,6 +1,10 @@
 package extract
 
-import "github.com/leporel/huetension/internal/color"
+import (
+	"sort"
+
+	"github.com/leporel/huetension/internal/color"
+)
 
 // Octree quantisation: insert every pixel into an 8-ary RGB tree (one bit per
 // channel per level), then iteratively collapse the deepest internal node
@@ -36,14 +40,12 @@ func extractOctree(pixels []color.Color, k int) []color.Color {
 	}
 
 	// Phase 1: collapse whole subtrees as long as doing so doesn't push
-	// leafCount below k. This is fast (O(tree)) and handles the common case.
-	for leafCount > k {
-		next := octReduce(root, leafCount, k)
-		if next >= leafCount {
-			break
-		}
-		leafCount = next
-	}
+	// leafCount below k. Single batch pass walks the tree once per depth
+	// level from deepest up, collecting all reducible internal nodes at
+	// that depth and collapsing as many as the budget allows. O(depth × N)
+	// total, instead of the O(N²) we'd get from picking one subtree at a
+	// time.
+	leafCount = octReduceBatch(root, leafCount, k)
 
 	var nodes []*octNode
 	octCollect(root, &nodes)
@@ -156,60 +158,70 @@ func octIndex(c color.Color, level int) int {
 	return idx
 }
 
-// octReduce promotes the deepest internal node with the smallest total
-// pixel count to a leaf, collapsing its entire subtree into a single
-// average color.
+// octReduceBatch shrinks the leaf set down toward k by collapsing whole
+// subtrees, processing one depth level at a time from deepest to
+// shallowest. At each level we walk the tree once, gather every internal
+// node whose subtree fits the remaining budget, sort by population
+// (smallest first), and collapse as many as we can before moving up.
 //
-// Two constraints filter the candidate set:
-//
-//  1. leaves >= 2 — collapsing a single-leaf chain is net zero progress
-//     (lose 1 leaf, gain 1) and would break the outer loop early.
-//  2. leafCount - leaves + 1 >= k — don't overshoot. If the only candidate
-//     would push us below k, return unchanged so the caller can fall back
-//     to leaf-pair merging.
-func octReduce(root *octNode, leafCount, k int) int {
-	maxRemovable := leafCount - k + 1
-	if maxRemovable < 2 {
-		return leafCount
+// Semantics match the old one-subtree-per-call octReduce: deepest first,
+// ties broken by smallest pixel count. The shift is just bookkeeping —
+// instead of re-walking the whole tree after every single collapse, we
+// batch all collapses at a given depth before re-walking for the next.
+// Total work drops from O(leafCount²) to O(octreeDepth × N).
+func octReduceBatch(root *octNode, leafCount, k int) int {
+	type candidate struct {
+		node   *octNode
+		count  uint64
+		leaves int
 	}
-
-	var best *octNode
-	var bestLeaves int
-	bestDepth := -1
-	var bestCount uint64 = ^uint64(0)
-
-	var walk func(n *octNode, depth int) int
-	walk = func(n *octNode, depth int) int {
-		if n == nil {
-			return 0
+	var cands []candidate
+	for depth := octreeDepth - 1; depth >= 0; depth-- {
+		if leafCount <= k {
+			return leafCount
 		}
-		if n.isLeaf {
-			return 1
-		}
-		leaves := 0
-		for _, c := range n.children {
-			leaves += walk(c, depth+1)
-		}
-		if leaves >= 2 && leaves <= maxRemovable {
-			if depth > bestDepth || (depth == bestDepth && n.count < bestCount) {
-				best = n
-				bestDepth = depth
-				bestCount = n.count
-				bestLeaves = leaves
+		cands = cands[:0]
+		var walk func(n *octNode, d int) int
+		walk = func(n *octNode, d int) int {
+			if n == nil {
+				return 0
 			}
+			if n.isLeaf {
+				return 1
+			}
+			leaves := 0
+			for _, c := range n.children {
+				leaves += walk(c, d+1)
+			}
+			if d == depth && leaves >= 2 {
+				cands = append(cands, candidate{node: n, count: n.count, leaves: leaves})
+			}
+			return leaves
 		}
-		return leaves
+		walk(root, 0)
+		if len(cands) == 0 {
+			continue
+		}
+		// Smallest pixel population first — matches the original tiebreaker
+		// within a depth level. Stable sort keeps the result deterministic
+		// even when counts collide; map-iteration is not in play here.
+		sort.SliceStable(cands, func(i, j int) bool { return cands[i].count < cands[j].count })
+		for _, c := range cands {
+			if leafCount <= k {
+				break
+			}
+			maxRemovable := leafCount - k
+			if c.leaves-1 > maxRemovable {
+				continue // collapsing this subtree would push us below k
+			}
+			for i := range c.node.children {
+				c.node.children[i] = nil
+			}
+			c.node.isLeaf = true
+			leafCount -= c.leaves - 1
+		}
 	}
-	walk(root, 0)
-	if best == nil {
-		return leafCount
-	}
-
-	for i := range best.children {
-		best.children[i] = nil
-	}
-	best.isLeaf = true
-	return leafCount - bestLeaves + 1
+	return leafCount
 }
 
 // octMergeNearestLeafPair finds the two leaves closest in OkLab and merges

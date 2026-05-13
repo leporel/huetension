@@ -160,6 +160,117 @@ func TestExtractCmdRejectsUnknownFormat(t *testing.T) {
 	}
 }
 
+func TestExtractCmdSoftPresetEmitsMetadata(t *testing.T) {
+	stdout := withStdoutBuffer(t)
+
+	cmd := newExtractCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		fixturePath(t, "img1.png"),
+		"--method", "softk",
+		"--soft-preset", "colorful",
+		"--size", "4",
+		"--format", "json",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, `"soft_preset":"colorful"`) {
+		t.Errorf("stdout missing soft_preset in metadata; got: %s", out)
+	}
+	if !strings.Contains(out, `"preset_effective":true`) {
+		t.Errorf("stdout missing preset_effective; got: %s", out)
+	}
+}
+
+func TestExtractCmdSoftPresetCaseInsensitive(t *testing.T) {
+	stdout := withStdoutBuffer(t)
+
+	cmd := newExtractCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		fixturePath(t, "img1.png"),
+		"--method", "soft",
+		"--soft-preset", "BRIGHT",
+		"--size", "3",
+		"--format", "json",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"soft_preset":"bright"`) {
+		t.Errorf("case-insensitive preset not normalised to 'bright'; got: %s", stdout.String())
+	}
+}
+
+func TestExtractCmdSoftPresetUnknown(t *testing.T) {
+	cmd := newExtractCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		fixturePath(t, "img1.png"),
+		"--soft-preset", "bogus",
+	})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for unknown preset")
+	}
+	if !strings.Contains(err.Error(), "unknown soft preset") {
+		t.Errorf("error %q should mention 'unknown soft preset'", err.Error())
+	}
+}
+
+func TestExtractCmdSoftPresetWrongMethod(t *testing.T) {
+	cmd := newExtractCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		fixturePath(t, "img1.png"),
+		"--method", "kmeans",
+		"--soft-preset", "bright",
+	})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for soft-preset with non-soft method")
+	}
+	if !strings.Contains(err.Error(), "requires --method soft or softk") {
+		t.Errorf("error %q should explain method requirement", err.Error())
+	}
+}
+
+func TestExtractCmdSoftPresetExplicitOverride(t *testing.T) {
+	// Preset sets MinChroma; explicit --min-saturation is HSL and lives on
+	// a separate axis — both should appear, but the preset path uses
+	// chroma fields. Verify metadata reflects the preset's effective
+	// chroma value, not zero.
+	stdout := withStdoutBuffer(t)
+
+	cmd := newExtractCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{
+		fixturePath(t, "img2.jpg"),
+		"--method", "softk",
+		"--soft-preset", "deep",
+		"--size", "4",
+		"--format", "json",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, `"soft_preset":"deep"`) {
+		t.Errorf("missing deep preset in metadata: %s", out)
+	}
+	// metadata writes min_chroma; deep preset sets it to 0.10.
+	if !strings.Contains(out, `"min_chroma":0.1`) {
+		t.Errorf("metadata should include min_chroma from preset; got: %s", out)
+	}
+}
+
 func TestParseSwatchSize(t *testing.T) {
 	cases := map[string]struct {
 		w, h    int

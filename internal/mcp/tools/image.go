@@ -132,13 +132,10 @@ type ImageExtractParams struct {
 	Method             string  `json:"method,omitempty" jsonschema:"extraction method: soft|kmeans|okkmeans|mediancut|softk|octree|popularity|wu|dbscan|wkmeans (default: soft)"`
 	Size               int     `json:"size,omitempty" jsonschema:"palette size (default 5, max 32)"`
 	Resize             int     `json:"resize,omitempty" jsonschema:"resize longest image side to this many pixels (default 512; 0 disables)"`
-	SortBy             string  `json:"sort_by,omitempty" jsonschema:"final palette sort: luminance|lightness|okl|hue|saturation|frequency|none"`
-	Reverse            bool    `json:"reverse,omitempty" jsonschema:"reverse the sort order"`
-	AlphaMaskThreshold int     `json:"alpha_mask_threshold,omitempty" jsonschema:"drop pixels with alpha < threshold (0..255)"`
-	MinSaturation      float64 `json:"min_saturation,omitempty" jsonschema:"soft/softk only: minimum HSL saturation 0..1"`
-	MinLightness       float64 `json:"min_lightness,omitempty" jsonschema:"soft/softk only: minimum HSL lightness 0..1"`
-	MaxLightness       float64 `json:"max_lightness,omitempty" jsonschema:"soft/softk only: maximum HSL lightness 0..1"`
-	MergeEpsilon       float64 `json:"merge_epsilon,omitempty" jsonschema:"soft only: Lab ΔE76 merge threshold (default 12)"`
+	SortBy             string `json:"sort_by,omitempty" jsonschema:"final palette sort: luminance|lightness|okl|hue|saturation|frequency|none"`
+	Reverse            bool   `json:"reverse,omitempty" jsonschema:"reverse the sort order"`
+	AlphaMaskThreshold int    `json:"alpha_mask_threshold,omitempty" jsonschema:"drop pixels with alpha < threshold (0..255)"`
+	SoftPreset         string `json:"soft_preset,omitempty" jsonschema:"soft/softk only: Kuler-like mood preset (default|colorful|bright|muted|deep|dark); drives perceptual filter + ranking. Omit = 'default'."`
 }
 
 // ImageExtractOutput wraps a single-image extraction in the huetension/v1
@@ -159,16 +156,13 @@ type ImageExtractBatchParams struct {
 	Sources []string `json:"sources" jsonschema:"image sources: file paths, http(s):// URLs, or data:...;base64,... URIs"`
 
 	// Same extraction knobs as image.extract, applied to each source.
-	Method             string  `json:"method,omitempty" jsonschema:"extraction method"`
-	Size               int     `json:"size,omitempty" jsonschema:"palette size"`
-	Resize             int     `json:"resize,omitempty" jsonschema:"resize longest side (px)"`
-	SortBy             string  `json:"sort_by,omitempty" jsonschema:"final palette sort"`
-	Reverse            bool    `json:"reverse,omitempty" jsonschema:"reverse sort order"`
-	AlphaMaskThreshold int     `json:"alpha_mask_threshold,omitempty" jsonschema:"drop low-alpha pixels"`
-	MinSaturation      float64 `json:"min_saturation,omitempty" jsonschema:"soft only"`
-	MinLightness       float64 `json:"min_lightness,omitempty" jsonschema:"soft only"`
-	MaxLightness       float64 `json:"max_lightness,omitempty" jsonschema:"soft only"`
-	MergeEpsilon       float64 `json:"merge_epsilon,omitempty" jsonschema:"soft only: ΔE76 merge"`
+	Method             string `json:"method,omitempty" jsonschema:"extraction method"`
+	Size               int    `json:"size,omitempty" jsonschema:"palette size"`
+	Resize             int    `json:"resize,omitempty" jsonschema:"resize longest side (px)"`
+	SortBy             string `json:"sort_by,omitempty" jsonschema:"final palette sort"`
+	Reverse            bool   `json:"reverse,omitempty" jsonschema:"reverse sort order"`
+	AlphaMaskThreshold int    `json:"alpha_mask_threshold,omitempty" jsonschema:"drop low-alpha pixels"`
+	SoftPreset         string `json:"soft_preset,omitempty" jsonschema:"soft/softk only: Kuler-like mood preset (default|colorful|bright|muted|deep|dark). Omit = 'default'."`
 
 	// MaxWorkers caps parallel extractions; 0 → 4.
 	MaxWorkers int `json:"max_workers,omitempty" jsonschema:"max parallel extractions (default 4)"`
@@ -201,22 +195,30 @@ type ImageExtractBatchOutput struct {
 
 // buildExtractOptions translates an ImageExtractParams (or the matching
 // fields in ImageExtractBatchParams) into an extract.Options.
-func buildExtractOptions(p ImageExtractParams) extract.Options {
+// Returns an error when soft_preset is set to an unknown value so the
+// tool surfaces it as an MCP error rather than silently dropping the
+// preset.
+func buildExtractOptions(p ImageExtractParams) (extract.Options, error) {
+	method := extract.Method(strings.ToLower(strings.TrimSpace(p.Method)))
+	preset, err := extract.ParseSoftPreset(p.SoftPreset)
+	if err != nil {
+		return extract.Options{}, err
+	}
+	if preset != "" && method != "" && method != extract.MethodSoft && method != extract.MethodSoftK {
+		return extract.Options{}, fmt.Errorf("soft_preset requires method 'soft' or 'softk', got %q", string(method))
+	}
 	opts := extract.Options{
-		Method:             extract.Method(strings.ToLower(strings.TrimSpace(p.Method))),
+		Method:             method,
 		PaletteSize:        p.Size,
 		Resize:             p.Resize,
 		AlphaMaskThreshold: clampAlphaThreshold(p.AlphaMaskThreshold),
-		MinSaturation:      p.MinSaturation,
-		MinLightness:       p.MinLightness,
-		MaxLightness:       p.MaxLightness,
-		MergeEpsilon:       p.MergeEpsilon,
+		SoftPreset:         preset,
 		Reverse:            p.Reverse,
 	}
 	if sb := strings.ToLower(strings.TrimSpace(p.SortBy)); sb != "" && sb != "none" {
 		opts.SortBy = palette.SortBy(sb)
 	}
-	return opts
+	return opts, nil
 }
 
 func clampAlphaThreshold(v int) uint8 {
@@ -324,11 +326,15 @@ func loadBatchSource(source string, sandbox ImageSandbox) (*imageio.Loaded, erro
 }
 
 func handleImageExtract(ctx context.Context, p ImageExtractParams, sandbox ImageSandbox) (*sdk.CallToolResult, ImageExtractOutput, error) {
+	opts, err := buildExtractOptions(p)
+	if err != nil {
+		return nil, ImageExtractOutput{}, err
+	}
 	loaded, err := loadImageInput(p, sandbox)
 	if err != nil {
 		return nil, ImageExtractOutput{}, err
 	}
-	pal, err := extract.FromLoaded(ctx, loaded, buildExtractOptions(p))
+	pal, err := extract.FromLoaded(ctx, loaded, opts)
 	if err != nil {
 		return nil, ImageExtractOutput{}, err
 	}
@@ -343,6 +349,21 @@ func handleImageExtract(ctx context.Context, p ImageExtractParams, sandbox Image
 func handleImageExtractBatch(ctx context.Context, p ImageExtractBatchParams, sandbox ImageSandbox) (*sdk.CallToolResult, ImageExtractBatchOutput, error) {
 	if len(p.Sources) == 0 {
 		return nil, ImageExtractBatchOutput{}, errors.New("sources is required")
+	}
+
+	// Validate extraction options up front so a bad preset / method
+	// combination fails fast without touching the filesystem.
+	opts, err := buildExtractOptions(ImageExtractParams{
+		Method:             p.Method,
+		Size:               p.Size,
+		Resize:             p.Resize,
+		SortBy:             p.SortBy,
+		Reverse:            p.Reverse,
+		AlphaMaskThreshold: p.AlphaMaskThreshold,
+		SoftPreset:         p.SoftPreset,
+	})
+	if err != nil {
+		return nil, ImageExtractBatchOutput{}, err
 	}
 
 	// Pre-resolve sources with sandbox checks. We do this serially because
@@ -382,19 +403,6 @@ func handleImageExtractBatch(ctx context.Context, p ImageExtractBatchParams, san
 	// Run extract on the loaded images. Reuse extract.Batch's worker pool
 	// indirectly: feed it pre-validated paths/URLs so the sandbox stays on
 	// the loadBatchSource side. Easier to do it inline here.
-	opts := buildExtractOptions(ImageExtractParams{
-		Method:             p.Method,
-		Size:               p.Size,
-		Resize:             p.Resize,
-		SortBy:             p.SortBy,
-		Reverse:            p.Reverse,
-		AlphaMaskThreshold: p.AlphaMaskThreshold,
-		MinSaturation:      p.MinSaturation,
-		MinLightness:       p.MinLightness,
-		MaxLightness:       p.MaxLightness,
-		MergeEpsilon:       p.MergeEpsilon,
-	})
-
 	maxWorkers := p.MaxWorkers
 	if maxWorkers <= 0 {
 		maxWorkers = 4
@@ -447,7 +455,7 @@ func RegisterImageExtract(srv *sdk.Server, deps Deps) {
 	sandbox := deps.ImageSandbox
 	sdk.AddTool(srv, &sdk.Tool{
 		Name:        "image.extract",
-		Description: "Extract a color palette from an image. Source is one of: local path (subject to read-only/root), http(s):// URL (subject to host allowlist), or base64 image bytes.",
+		Description: "Extract a color palette from an image. Source is one of: local path (subject to read-only/root), http(s):// URL (subject to host allowlist), or base64 image bytes. For soft/softk methods, use 'soft_preset' to pick a Kuler-like mood (default|colorful|bright|muted|deep|dark).",
 	}, func(ctx context.Context, _ *sdk.CallToolRequest, p ImageExtractParams) (*sdk.CallToolResult, ImageExtractOutput, error) {
 		return handleImageExtract(ctx, p, sandbox)
 	})
@@ -458,7 +466,7 @@ func RegisterImageExtractBatch(srv *sdk.Server, deps Deps) {
 	sandbox := deps.ImageSandbox
 	sdk.AddTool(srv, &sdk.Tool{
 		Name:        "image.extractBatch",
-		Description: "Extract palettes from multiple images in parallel. Per-source failures appear as 'error' fields on each entry; a total failure (every source rejected) is reported as a tool error.",
+		Description: "Extract palettes from multiple images in parallel. Per-source failures appear as 'error' fields on each entry; a total failure (every source rejected) is reported as a tool error. For soft/softk methods, use 'soft_preset' (default|colorful|bright|muted|deep|dark) — applied uniformly to all sources.",
 	}, func(ctx context.Context, _ *sdk.CallToolRequest, p ImageExtractBatchParams) (*sdk.CallToolResult, ImageExtractBatchOutput, error) {
 		return handleImageExtractBatch(ctx, p, sandbox)
 	})

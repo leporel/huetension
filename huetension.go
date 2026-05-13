@@ -67,6 +67,25 @@ var (
 type (
 	ExtractMethod  = extract.Method
 	ExtractOptions = extract.Options
+	// SoftPreset is a Kuler-like mood preset for the Soft/SoftK methods.
+	SoftPreset = extract.SoftPreset
+)
+
+// Soft preset values. Empty string means "no preset" — the legacy
+// HSL-knob behavior stays in effect.
+const (
+	SoftPresetDefault  = extract.SoftPresetDefault
+	SoftPresetColorful = extract.SoftPresetColorful
+	SoftPresetBright   = extract.SoftPresetBright
+	SoftPresetMuted    = extract.SoftPresetMuted
+	SoftPresetDeep     = extract.SoftPresetDeep
+	SoftPresetDark     = extract.SoftPresetDark
+)
+
+// AllSoftPresets is the canonical list of supported soft presets.
+var (
+	AllSoftPresets   = extract.AllSoftPresets
+	ParseSoftPreset  = extract.ParseSoftPreset
 )
 
 const (

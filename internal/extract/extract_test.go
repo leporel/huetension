@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/leporel/huetension/internal/color"
 	"github.com/leporel/huetension/internal/exporter"
@@ -236,7 +237,9 @@ func TestExtractNilImage(t *testing.T) {
 
 // TestExtractWritesPaletteSidecar regenerates one preview JPG per
 // (fixture × method) combination, so `internal/extract/testdata/` doubles
-// as a visual snapshot of how each algorithm currently behaves.
+// as a visual snapshot of how each algorithm currently behaves. For the
+// soft and softk methods, an additional sidecar per preset is rendered so
+// the mood comparison table in testdata/README.md stays in sync.
 func TestExtractWritesPaletteSidecar(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode")
@@ -246,15 +249,18 @@ func TestExtractWritesPaletteSidecar(t *testing.T) {
 	for _, name := range fixtures {
 		for _, m := range AllMethods {
 			out := paletteSidecarPath(name, m)
+			start := time.Now()
 			p, err := FromSource(context.Background(), fixturePath(name), Options{
 				Method:      m,
-				PaletteSize: 6,
+				PaletteSize: 5,
 				SortBy:      palette.SortByOkL, // dark → light makes the swatch row read like a gradient
 			}, imageio.LoadOptions{})
+			elapsed := time.Since(start)
 			if err != nil {
 				t.Errorf("%s/%s: %v", name, m, err)
 				continue
 			}
+			t.Logf("%-9s | %-26s | %5d ms | size=%d", name, string(m), elapsed.Milliseconds(), len(p.Colors))
 			if err := writePaletteJPG(out, p, 96, 96); err != nil {
 				t.Errorf("%s: %v", out, err)
 				continue
@@ -266,6 +272,45 @@ func TestExtractWritesPaletteSidecar(t *testing.T) {
 			}
 			if info.Size() < 100 {
 				t.Errorf("output %s suspiciously small: %d bytes", out, info.Size())
+			}
+		}
+		// Per-preset sidecars for the soft / softk methods. SoftPresetDefault
+		// is skipped — the base imgN_palette_{soft,softk}.jpg above already
+		// renders the default preset (applyDefaults normalises empty preset
+		// to default for the soft pipeline).
+		for _, m := range []Method{MethodSoft, MethodSoftK} {
+			for _, preset := range AllSoftPresets {
+				if preset == SoftPresetDefault {
+					continue
+				}
+				out := presetSidecarPath(name, m, preset)
+				start := time.Now()
+				p, err := FromSource(context.Background(), fixturePath(name), Options{
+					Method:      m,
+					PaletteSize: 5,
+					SortBy:      palette.SortByOkL,
+					SoftPreset:  preset,
+				}, imageio.LoadOptions{})
+				elapsed := time.Since(start)
+				if err != nil {
+					t.Errorf("%s/%s/%s: %v", name, m, preset, err)
+					continue
+				}
+				label := string(m) + " - " + string(preset)
+				effective, _ := p.Metadata.Params["preset_effective"].(bool)
+				t.Logf("%-9s | %-26s | %5d ms | size=%d effective=%v", name, label, elapsed.Milliseconds(), len(p.Colors), effective)
+				if err := writePaletteJPG(out, p, 96, 96); err != nil {
+					t.Errorf("%s: %v", out, err)
+					continue
+				}
+				info, err := os.Stat(out)
+				if err != nil {
+					t.Errorf("stat %s: %v", out, err)
+					continue
+				}
+				if info.Size() < 100 {
+					t.Errorf("output %s suspiciously small: %d bytes", out, info.Size())
+				}
 			}
 		}
 	}
@@ -292,19 +337,197 @@ func paletteSidecarPath(name string, m Method) string {
 	return filepath.Join("testdata", base+"_palette_"+string(m)+".jpg")
 }
 
+// presetSidecarPath returns
+// "testdata/<basename>_palette_<method>_<preset>.jpg" — the per-preset
+// variant of paletteSidecarPath used by the mood comparison table.
+func presetSidecarPath(name string, m Method, preset SoftPreset) string {
+	base := strings.TrimSuffix(name, filepath.Ext(name))
+	return filepath.Join("testdata", base+"_palette_"+string(m)+"_"+string(preset)+".jpg")
+}
+
 func TestSoftFallbackWhenFiltersTooStrict(t *testing.T) {
-	// Force MinSaturation to a value the input can't satisfy. Soft mode must
-	// fall back to the raw pixel set rather than returning empty.
+	// Force a chroma floor the input can't satisfy. Soft mode must fall
+	// back to the raw pixel set rather than returning empty.
 	img := solidImage(32, stdcolor.NRGBA{R: 128, G: 128, B: 128, A: 255})
 	p, err := Extract(context.Background(), img, Options{
-		Method:        MethodSoft,
-		PaletteSize:   3,
-		MinSaturation: 0.99,
+		Method:      MethodSoft,
+		PaletteSize: 3,
+		MinChroma:   0.99,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(p.Colors) == 0 {
 		t.Errorf("soft mode returned empty palette under aggressive filter")
+	}
+}
+
+func TestApplyDefaultsRespectsPresetPrecedence(t *testing.T) {
+	t.Run("preset fills only zero fields", func(t *testing.T) {
+		got := applyDefaults(Options{
+			Method:     MethodSoft,
+			SoftPreset: SoftPresetColorful,
+		})
+		want := softPresetMapping(SoftPresetColorful)
+		if got.MinOkL != want.MinOkL || got.MaxOkL != want.MaxOkL {
+			t.Errorf("OkL bounds: got (%.2f, %.2f), want (%.2f, %.2f)",
+				got.MinOkL, got.MaxOkL, want.MinOkL, want.MaxOkL)
+		}
+		if got.MinChroma != want.MinChroma {
+			t.Errorf("MinChroma: got %.2f, want %.2f", got.MinChroma, want.MinChroma)
+		}
+		if got.RankSaturationExponent != want.SaturationExponent {
+			t.Errorf("exponent: got %.2f, want %.2f",
+				got.RankSaturationExponent, want.SaturationExponent)
+		}
+	})
+
+	t.Run("explicit overrides preserved", func(t *testing.T) {
+		got := applyDefaults(Options{
+			Method:                 MethodSoftK,
+			SoftPreset:             SoftPresetBright,
+			MinOkL:                 0.42,
+			RankSaturationExponent: 3.14,
+		})
+		if got.MinOkL != 0.42 {
+			t.Errorf("explicit MinOkL was overwritten: %.2f", got.MinOkL)
+		}
+		if got.RankSaturationExponent != 3.14 {
+			t.Errorf("explicit exponent was overwritten: %.2f", got.RankSaturationExponent)
+		}
+		// Untouched fields still come from the preset.
+		want := softPresetMapping(SoftPresetBright)
+		if got.MaxOkL != want.MaxOkL {
+			t.Errorf("MaxOkL should be from preset: got %.2f, want %.2f",
+				got.MaxOkL, want.MaxOkL)
+		}
+	})
+
+	t.Run("empty preset is normalised to default", func(t *testing.T) {
+		got := applyDefaults(Options{Method: MethodSoft})
+		if got.SoftPreset != SoftPresetDefault {
+			t.Errorf("SoftPreset: got %q, want %q", got.SoftPreset, SoftPresetDefault)
+		}
+		want := softPresetMapping(SoftPresetDefault)
+		if got.MinOkL != want.MinOkL || got.MaxOkL != want.MaxOkL {
+			t.Errorf("OkL bounds: got (%.2f, %.2f), want (%.2f, %.2f)",
+				got.MinOkL, got.MaxOkL, want.MinOkL, want.MaxOkL)
+		}
+		if got.RankSaturationExponent != want.SaturationExponent {
+			t.Errorf("RankSaturationExponent: got %.2f, want %.2f",
+				got.RankSaturationExponent, want.SaturationExponent)
+		}
+	})
+
+	t.Run("non-soft method leaves preset fields untouched", func(t *testing.T) {
+		got := applyDefaults(Options{Method: MethodKMeans})
+		if got.SoftPreset != "" {
+			t.Errorf("non-soft method should not auto-default SoftPreset, got %q", got.SoftPreset)
+		}
+		if got.MinOkL != 0 || got.RankSaturationExponent != 0 {
+			t.Errorf("non-soft method should not populate preset fields, got MinOkL=%.2f exp=%.2f",
+				got.MinOkL, got.RankSaturationExponent)
+		}
+	})
+}
+
+func TestSoftPresetProducesPalette(t *testing.T) {
+	fixtures := []string{"img1.png", "img2.jpg", "img3.jpg"}
+	for _, name := range fixtures {
+		for _, preset := range AllSoftPresets {
+			for _, m := range []Method{MethodSoft, MethodSoftK} {
+				t.Run(name+"/"+string(m)+"/"+string(preset), func(t *testing.T) {
+					p, err := FromSource(context.Background(), fixturePath(name), Options{
+						Method:      m,
+						PaletteSize: 5,
+						SoftPreset:  preset,
+					}, imageio.LoadOptions{})
+					if err != nil {
+						t.Fatalf("extract: %v", err)
+					}
+					if len(p.Colors) == 0 {
+						t.Fatalf("empty palette")
+					}
+					if len(p.Colors) > 5 {
+						t.Errorf("got %d colors, want ≤ 5", len(p.Colors))
+					}
+					if got := p.Metadata.Params["soft_preset"]; got != string(preset) {
+						t.Errorf("metadata.soft_preset = %v, want %s", got, preset)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestSoftPresetDeterministic(t *testing.T) {
+	for _, preset := range AllSoftPresets {
+		t.Run(string(preset), func(t *testing.T) {
+			opts := Options{
+				Method:      MethodSoftK,
+				PaletteSize: 6,
+				SoftPreset:  preset,
+			}
+			a, err := FromSource(context.Background(), fixturePath("img2.jpg"), opts, imageio.LoadOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, err := FromSource(context.Background(), fixturePath("img2.jpg"), opts, imageio.LoadOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(a.Colors) != len(b.Colors) {
+				t.Fatalf("color count drifted: %d vs %d", len(a.Colors), len(b.Colors))
+			}
+			for i := range a.Colors {
+				if a.Colors[i].R != b.Colors[i].R ||
+					a.Colors[i].G != b.Colors[i].G ||
+					a.Colors[i].B != b.Colors[i].B {
+					t.Errorf("color %d drifted: %v vs %v", i, a.Colors[i], b.Colors[i])
+				}
+			}
+		})
+	}
+}
+
+func TestSoftPresetFallbackMetadata(t *testing.T) {
+	// Solid mid-grey: zero chroma everywhere. SoftPresetDeep requires
+	// MinChroma 0.10, so the pre-filter will knock out every pixel and the
+	// pipeline must fall back to the raw set, marking the preset ineffective.
+	img := solidImage(32, stdcolor.NRGBA{R: 128, G: 128, B: 128, A: 255})
+	p, err := Extract(context.Background(), img, Options{
+		Method:      MethodSoftK,
+		PaletteSize: 3,
+		SoftPreset:  SoftPresetDeep,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Colors) == 0 {
+		t.Fatal("preset path returned empty palette under fallback")
+	}
+	if v, ok := p.Metadata.Params["preset_effective"].(bool); !ok || v {
+		t.Errorf("preset_effective = %v (want false)", p.Metadata.Params["preset_effective"])
+	}
+	if v, ok := p.Metadata.Params["preset_fallback"].(string); !ok || v != "insufficient_pixels" {
+		t.Errorf("preset_fallback = %v (want 'insufficient_pixels')", p.Metadata.Params["preset_fallback"])
+	}
+}
+
+func TestSoftPresetEffectiveOnNormalImage(t *testing.T) {
+	// On a real photo with lots of chroma, the preset should NOT fall back.
+	p, err := FromSource(context.Background(), fixturePath("img2.jpg"), Options{
+		Method:      MethodSoftK,
+		PaletteSize: 5,
+		SoftPreset:  SoftPresetColorful,
+	}, imageio.LoadOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := p.Metadata.Params["preset_effective"].(bool); !ok || !v {
+		t.Errorf("preset_effective = %v (want true)", p.Metadata.Params["preset_effective"])
+	}
+	if _, has := p.Metadata.Params["preset_fallback"]; has {
+		t.Errorf("preset_fallback should be absent when preset is effective")
 	}
 }

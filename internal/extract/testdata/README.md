@@ -51,8 +51,57 @@ small-but-distinctive regions:
 `saliency` here is the proxy `log(count + 1) × (saturationFloor + saturation)^SaliencyPow` — see `internal/extract/saliency.go` for the rationale.
 It's not a real visual saliency model; that would require the original 2D pixel grid, which the extract layer deliberately flattens.
 
+## Soft preset × source matrix (mood comparison)
+
+Adobe Kuler-style mood presets for the `soft` / `softk` methods. Each
+preset combines a perceptual pre-filter (OkLCH chroma + OkL bounds) with
+a ranking tweak (saturation bias / exponent and OkL preference). Numbers
+live in `internal/extract/preset.go`; tuning intent is summarised below.
+
+| Soft preset | Intent | Filter (OkL × chroma) | Ranking tweak |
+|---|---|---|---|
+| `default` | Balanced everyday mood — used implicitly when no preset is set | OkL 0.10–0.92, chroma ≥ 0.02 | exp 1.2, OkL pref 0 |
+| `colorful` | Surface diverse, high-chroma hues | OkL 0.15–0.90, chroma ≥ 0.08 | exp 2.0, OkL pref 0 |
+| `bright` | Light + vivid; avoid pastels-from-the-shadows | OkL 0.55–0.95, chroma ≥ 0.06 | exp 1.5, OkL pref **+0.5** |
+| `muted` | Faded / desaturated; cap chroma low | OkL 0.20–0.85, chroma 0.01–0.10 | bias 1.5, exp 0.4 |
+| `deep` | Rich and saturated, not pastel and not pure-dark | OkL 0.20–0.60, chroma ≥ 0.10 | exp 1.8, OkL pref **−0.3** |
+| `dark` | Constrained low-OkL palette | OkL 0.05–0.45, chroma ≥ 0.04 | OkL pref **−0.6** |
+
+Omitting `soft_preset` (or passing `""`) is equivalent to passing
+`default` — the soft pipeline always runs the perceptual filter and
+ranking. The MCP tool surface exposes only `soft_preset`.
+
+If the pre-filter knocks out too many pixels (e.g. `deep` on a flat-grey
+image), the pipeline falls back to the unfiltered set and metadata gains
+`"preset_effective": false` and `"preset_fallback": "insufficient_pixels"`.
+
+### Method × preset × source
+
+The base `soft` / `softk` rows in the matrix above already render the
+`default` preset (it's the implicit baseline); this table covers the
+remaining five moods.
+
+| Method × preset | img1.png | img2.jpg | img3.jpg |
+|---|---|---|---|
+| **source** | ![source](img1.png) | ![source](img2.jpg) | ![source](img3.jpg) |
+| `soft - default` | ![soft](img1_palette_soft.jpg) | ![soft](img2_palette_soft.jpg) | ![soft](img3_palette_soft.jpg) |
+| `soft - colorful` | ![soft colorful](img1_palette_soft_colorful.jpg) | ![soft colorful](img2_palette_soft_colorful.jpg) | ![soft colorful](img3_palette_soft_colorful.jpg) |
+| `soft - bright` | ![soft bright](img1_palette_soft_bright.jpg) | ![soft bright](img2_palette_soft_bright.jpg) | ![soft bright](img3_palette_soft_bright.jpg) |
+| `soft - muted` | ![soft muted](img1_palette_soft_muted.jpg) | ![soft muted](img2_palette_soft_muted.jpg) | ![soft muted](img3_palette_soft_muted.jpg) |
+| `soft - deep` | ![soft deep](img1_palette_soft_deep.jpg) | ![soft deep](img2_palette_soft_deep.jpg) | ![soft deep](img3_palette_soft_deep.jpg) |
+| `soft - dark` | ![soft dark](img1_palette_soft_dark.jpg) | ![soft dark](img2_palette_soft_dark.jpg) | ![soft dark](img3_palette_soft_dark.jpg) |
+
+| Method × preset | img1.png | img2.jpg | img3.jpg |
+|---|---|---|---|
+| `softk - default` | ![softk](img1_palette_softk.jpg) | ![softk](img2_palette_softk.jpg) | ![softk](img3_palette_softk.jpg) |
+| `softk - colorful` | ![softk colorful](img1_palette_softk_colorful.jpg) | ![softk colorful](img2_palette_softk_colorful.jpg) | ![softk colorful](img3_palette_softk_colorful.jpg) |
+| `softk - bright` | ![softk bright](img1_palette_softk_bright.jpg) | ![softk bright](img2_palette_softk_bright.jpg) | ![softk bright](img3_palette_softk_bright.jpg) |
+| `softk - muted` | ![softk muted](img1_palette_softk_muted.jpg) | ![softk muted](img2_palette_softk_muted.jpg) | ![softk muted](img3_palette_softk_muted.jpg) |
+| `softk - deep` | ![softk deep](img1_palette_softk_deep.jpg) | ![softk deep](img2_palette_softk_deep.jpg) | ![softk deep](img3_palette_softk_deep.jpg) |
+| `softk - dark` | ![softk dark](img1_palette_softk_dark.jpg) | ![softk dark](img2_palette_softk_dark.jpg) | ![softk dark](img3_palette_softk_dark.jpg) |
+
 ## Regenerating
 
 ```sh
-go test ./internal/extract/ -run TestExtractWritesPaletteSidecar
+go test ./internal/extract/ -run TestExtractWritesPaletteSidecar -v
 ```

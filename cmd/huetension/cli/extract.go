@@ -17,19 +17,17 @@ import (
 // other commands. Fields embedded into command-local locals so the cobra
 // callbacks can read them after parsing.
 type extractFlags struct {
-	method        string
-	size          int
-	resize        int
-	alphaMask     uint8
-	minSat        float64
-	minLight      float64
-	maxLight      float64
-	mergeEpsilon  float64
-	sortBy        string
-	reverse       bool
-	timeout       time.Duration
-	allowedHosts  []string
-	maxBytes      int64
+	method       string
+	size         int
+	resize       int
+	alphaMask    uint8
+	softPreset   string
+	mergeEpsilon float64
+	sortBy       string
+	reverse      bool
+	timeout      time.Duration
+	allowedHosts []string
+	maxBytes     int64
 }
 
 func newExtractCmd() *cobra.Command {
@@ -55,9 +53,7 @@ func newExtractCmd() *cobra.Command {
 	cmd.Flags().IntVarP(&ef.size, "size", "k", 5, "palette size (number of colors)")
 	cmd.Flags().IntVarP(&ef.resize, "resize", "r", 512, "resize longest image side before extracting (0 = no resize)")
 	cmd.Flags().Uint8Var(&ef.alphaMask, "alpha-mask", 0, "drop pixels with alpha strictly below this value (0..255)")
-	cmd.Flags().Float64Var(&ef.minSat, "min-saturation", 0, "soft/softk only: drop pixels with HSL saturation below this value")
-	cmd.Flags().Float64Var(&ef.minLight, "min-lightness", 0, "soft/softk only: drop pixels darker than this lightness")
-	cmd.Flags().Float64Var(&ef.maxLight, "max-lightness", 0, "soft/softk only: drop pixels brighter than this lightness")
+	cmd.Flags().StringVar(&ef.softPreset, "soft-preset", "", softPresetFlagUsage())
 	cmd.Flags().Float64Var(&ef.mergeEpsilon, "merge-epsilon", 0, "soft only: ΔE76 threshold below which clusters are merged (0 = default)")
 	cmd.Flags().StringVar(&ef.sortBy, "sort", "", "sort palette by (luminance|lightness|okl|hue|saturation|frequency)")
 	cmd.Flags().BoolVar(&ef.reverse, "reverse", false, "reverse the sort order")
@@ -73,14 +69,21 @@ func runExtract(ctx context.Context, source string, ef *extractFlags, of *output
 		ctx = context.Background()
 	}
 
+	method := extract.Method(ef.method)
+	preset, err := extract.ParseSoftPreset(ef.softPreset)
+	if err != nil {
+		return err
+	}
+	if preset != "" && method != extract.MethodSoft && method != extract.MethodSoftK {
+		return fmt.Errorf("--soft-preset requires --method soft or softk, got %q", string(method))
+	}
+
 	opts := extract.Options{
-		Method:             extract.Method(ef.method),
+		Method:             method,
 		PaletteSize:        ef.size,
 		Resize:             ef.resize,
 		AlphaMaskThreshold: ef.alphaMask,
-		MinSaturation:      ef.minSat,
-		MinLightness:       ef.minLight,
-		MaxLightness:       ef.maxLight,
+		SoftPreset:         preset,
 		MergeEpsilon:       ef.mergeEpsilon,
 		SortBy:             palette.SortBy(ef.sortBy),
 		Reverse:            ef.reverse,
@@ -122,4 +125,15 @@ func methodFlagUsage() string {
 		parts[i] = string(m)
 	}
 	return "extraction method (" + strings.Join(parts, "|") + ")"
+}
+
+// softPresetFlagUsage builds the --soft-preset usage string from the
+// canonical preset list so adding a preset to internal/extract picks it
+// up automatically.
+func softPresetFlagUsage() string {
+	parts := make([]string, len(extract.AllSoftPresets))
+	for i, p := range extract.AllSoftPresets {
+		parts[i] = string(p)
+	}
+	return "soft/softk only: mood preset (" + strings.Join(parts, "|") + "); explicit knobs override preset values"
 }

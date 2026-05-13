@@ -350,3 +350,88 @@ func TestSandboxCheckPathRelative(t *testing.T) {
 		t.Errorf("traversal path should have been rejected")
 	}
 }
+
+func TestImageExtractSoftPreset(t *testing.T) {
+	_, data := makeTinyPNG(t, "")
+	encoded := base64.StdEncoding.EncodeToString(data)
+	_, out, err := handleImageExtract(context.Background(), ImageExtractParams{
+		Data:       encoded,
+		Method:     "softk",
+		Size:       2,
+		SoftPreset: "colorful",
+	}, ImageSandbox{})
+	if err != nil {
+		t.Fatalf("handleImageExtract: %v", err)
+	}
+	if out.Result.Size == 0 {
+		t.Fatalf("empty palette")
+	}
+	params := out.Result.Metadata.Params
+	if got := params["soft_preset"]; got != "colorful" {
+		t.Errorf("metadata.soft_preset = %v, want 'colorful'", got)
+	}
+}
+
+func TestImageExtractSoftPresetCaseInsensitive(t *testing.T) {
+	_, data := makeTinyPNG(t, "")
+	encoded := base64.StdEncoding.EncodeToString(data)
+	_, out, err := handleImageExtract(context.Background(), ImageExtractParams{
+		Data:       encoded,
+		Method:     "soft",
+		Size:       2,
+		SoftPreset: "BRIGHT",
+	}, ImageSandbox{})
+	if err != nil {
+		t.Fatalf("handleImageExtract: %v", err)
+	}
+	if got := out.Result.Metadata.Params["soft_preset"]; got != "bright" {
+		t.Errorf("soft_preset = %v, want 'bright' (normalised)", got)
+	}
+}
+
+func TestImageExtractSoftPresetUnknown(t *testing.T) {
+	_, data := makeTinyPNG(t, "")
+	encoded := base64.StdEncoding.EncodeToString(data)
+	_, _, err := handleImageExtract(context.Background(), ImageExtractParams{
+		Data:       encoded,
+		Method:     "softk",
+		SoftPreset: "bogus",
+	}, ImageSandbox{})
+	if err == nil {
+		t.Fatal("expected error for unknown preset")
+	}
+	if !strings.Contains(err.Error(), "unknown soft preset") {
+		t.Errorf("error %q should mention 'unknown soft preset'", err.Error())
+	}
+}
+
+func TestImageExtractSoftPresetWrongMethod(t *testing.T) {
+	_, data := makeTinyPNG(t, "")
+	encoded := base64.StdEncoding.EncodeToString(data)
+	_, _, err := handleImageExtract(context.Background(), ImageExtractParams{
+		Data:       encoded,
+		Method:     "kmeans",
+		SoftPreset: "bright",
+	}, ImageSandbox{})
+	if err == nil {
+		t.Fatal("expected error for soft_preset + non-soft method")
+	}
+	if !strings.Contains(err.Error(), "requires method") {
+		t.Errorf("error %q should mention method requirement", err.Error())
+	}
+}
+
+func TestImageExtractBatchSoftPresetUnknown(t *testing.T) {
+	// Bad preset should short-circuit before any source loading.
+	_, _, err := handleImageExtractBatch(context.Background(), ImageExtractBatchParams{
+		Sources:    []string{"does-not-matter"},
+		Method:     "softk",
+		SoftPreset: "bogus",
+	}, ImageSandbox{})
+	if err == nil {
+		t.Fatal("expected error for unknown preset in batch")
+	}
+	if !strings.Contains(err.Error(), "unknown soft preset") {
+		t.Errorf("error %q should mention 'unknown soft preset'", err.Error())
+	}
+}
