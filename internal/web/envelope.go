@@ -49,6 +49,18 @@ func writeEnvelope(w http.ResponseWriter, tool string, params any, result any) {
 	}
 }
 
+// marshalEnvelope builds a huetension/v1 envelope and returns its JSON
+// bytes. Used by handlers that precompute an immutable response so they
+// can answer conditional (If-None-Match) requests without re-encoding.
+func marshalEnvelope(tool string, params any, result any) ([]byte, error) {
+	return json.Marshal(genericEnvelope{
+		Schema: schemaVersion,
+		Tool:   tool,
+		Params: params,
+		Result: result,
+	})
+}
+
 // writePaletteJSON renders pal through exporter.Export(FormatJSON) and
 // writes the bytes verbatim. This is the cheapest possible parity check
 // with the CLI's --format json mode — by construction, the same palette

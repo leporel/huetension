@@ -69,6 +69,57 @@ func TestLibraryIndexEnvelope(t *testing.T) {
 	}
 }
 
+func TestLibraryIndexETag(t *testing.T) {
+	base, stop := newLibraryServer(t)
+	defer stop()
+
+	// First request: 200 carrying an ETag.
+	resp1, err := http.Get(base + "/api/v1/library")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	resp1.Body.Close()
+	if resp1.StatusCode != http.StatusOK {
+		t.Fatalf("first request status: %d", resp1.StatusCode)
+	}
+	etag := resp1.Header.Get("ETag")
+	if etag == "" {
+		t.Fatal("no ETag header on /library response")
+	}
+
+	// Conditional request echoing the ETag: 304, empty body.
+	req2, _ := http.NewRequest(http.MethodGet, base+"/api/v1/library", nil)
+	req2.Header.Set("If-None-Match", etag)
+	resp2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatalf("conditional GET: %v", err)
+	}
+	body2, _ := io.ReadAll(resp2.Body)
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusNotModified {
+		t.Fatalf("matching If-None-Match: status %d, want 304", resp2.StatusCode)
+	}
+	if len(body2) != 0 {
+		t.Errorf("304 response carried a %d-byte body", len(body2))
+	}
+
+	// Stale ETag: full 200 with the catalogue body.
+	req3, _ := http.NewRequest(http.MethodGet, base+"/api/v1/library", nil)
+	req3.Header.Set("If-None-Match", `"stale-etag"`)
+	resp3, err := http.DefaultClient.Do(req3)
+	if err != nil {
+		t.Fatalf("stale conditional GET: %v", err)
+	}
+	body3, _ := io.ReadAll(resp3.Body)
+	resp3.Body.Close()
+	if resp3.StatusCode != http.StatusOK {
+		t.Errorf("stale If-None-Match: status %d, want 200", resp3.StatusCode)
+	}
+	if len(body3) == 0 {
+		t.Error("200 response had an empty body")
+	}
+}
+
 func TestLibraryByCategoryAcceptsSlugAndName(t *testing.T) {
 	base, stop := newLibraryServer(t)
 	defer stop()

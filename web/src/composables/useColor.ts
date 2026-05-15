@@ -253,7 +253,7 @@ export function fromHSV(h: number, s: number, v: number): RGB {
 // OkLab / OkLCH — verbatim matrices from internal/color/oklab.go
 // ---------------------------------------------------------------------------
 
-function srgbToLinear(v: number): number {
+export function srgbToLinear(v: number): number {
   return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
 }
 
@@ -307,6 +307,23 @@ export function toOkLCH(c: RGB): OkLCH {
 export function fromOkLCH(L: number, C: number, H: number): RGB {
   const rad = (H * Math.PI) / 180;
   return fromOkLab({ L, a: C * Math.cos(rad), b: C * Math.sin(rad) });
+}
+
+// ---------------------------------------------------------------------------
+// Metrics
+// ---------------------------------------------------------------------------
+
+/**
+ * WCAG 2.1 relative luminance, 0..1. Verbatim mirror of
+ * `internal/color/metrics.go::Luminance` — same linearisation and the
+ * same 0.2126 / 0.7152 / 0.0722 channel weights. Used by the contrast
+ * composable and by the S7b "extract gradient" extreme-luminance pick.
+ */
+export function luminance(c: RGB): number {
+  const rl = srgbToLinear(c.r / 255);
+  const gl = srgbToLinear(c.g / 255);
+  const bl = srgbToLinear(c.b / 255);
+  return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl;
 }
 
 // ---------------------------------------------------------------------------

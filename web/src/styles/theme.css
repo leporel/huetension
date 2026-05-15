@@ -31,6 +31,14 @@
   --warn: oklch(0.82 0.14 85);
   --bad: oklch(0.70 0.18 25);
 
+  /* Soft fill / line variants of the status colors — used by pass/fail
+     chips (contrast badges). Same hue as --good/--bad so they read as a
+     family; alpha-tinted so they sit on any surface. */
+  --good-soft: oklch(0.78 0.14 155 / 0.14);
+  --good-line: oklch(0.78 0.14 155 / 0.45);
+  --bad-soft: oklch(0.70 0.18 25 / 0.12);
+  --bad-line: oklch(0.70 0.18 25 / 0.42);
+
   --bg-ambient:
     radial-gradient(1200px 600px at 80% -10%, oklch(0.66 0.20 280 / 0.08), transparent 60%),
     radial-gradient(900px 500px at -10% 110%, oklch(0.55 0.18 320 / 0.06), transparent 60%);
@@ -73,6 +81,11 @@
   --good: oklch(0.58 0.16 155);
   --warn: oklch(0.62 0.16 85);
   --bad: oklch(0.55 0.20 25);
+
+  --good-soft: oklch(0.58 0.16 155 / 0.12);
+  --good-line: oklch(0.58 0.16 155 / 0.40);
+  --bad-soft: oklch(0.55 0.20 25 / 0.10);
+  --bad-line: oklch(0.55 0.20 25 / 0.38);
 
   --bg-ambient:
     radial-gradient(1200px 600px at 80% -10%, oklch(0.66 0.20 280 / 0.06), transparent 60%),

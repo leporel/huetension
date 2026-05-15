@@ -1,6 +1,8 @@
 package web
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -73,30 +75,85 @@ func libraryUnavailable(w http.ResponseWriter, idx *library.Index) bool {
 }
 
 func libraryIndexHandler(idx *library.Index) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
+	// The catalogue is immutable for the process lifetime (loaded once
+	// at startup — there is no reload path on library.Index), so the
+	// full /library body and its content-hash ETag are computed here at
+	// registration. The handler just replays them, letting clients
+	// short-circuit a reload to a bodiless 304.
+	var (
+		body     []byte
+		etag     string
+		buildErr error
+	)
+	if idx != nil {
+		body, buildErr = buildLibraryIndexBody(idx)
+		if buildErr == nil {
+			sum := sha256.Sum256(body)
+			etag = `"` + hex.EncodeToString(sum[:16]) + `"`
+		}
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
 		if libraryUnavailable(w, idx) {
 			return
 		}
-		cats := idx.Categories()
-		catsOut := make([]libraryCategoryJSON, len(cats))
-		for i, c := range cats {
-			catsOut[i] = libraryCategoryJSON{Slug: c.Slug, Name: c.Name, Count: c.Count}
+		if buildErr != nil {
+			writeError(w, http.StatusInternalServerError, buildErr)
+			return
 		}
-		all := idx.All()
-		palOut := make([]libraryPaletteJSON, 0, len(all))
-		for _, lp := range all {
-			encoded, err := encodeLibraryPalette(lp)
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, err)
-				return
-			}
-			palOut = append(palOut, encoded)
+		h := w.Header()
+		h.Set("ETag", etag)
+		// no-cache = the browser must revalidate every time; our ETag
+		// then turns the revalidation into a cheap 304.
+		h.Set("Cache-Control", "no-cache")
+		if etagMatches(r.Header.Get("If-None-Match"), etag) {
+			w.WriteHeader(http.StatusNotModified)
+			return
 		}
-		writeEnvelope(w, "library.index", nil, libraryIndexResult{
-			Categories: catsOut,
-			Palettes:   palOut,
-		})
+		h.Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write(body)
 	}
+}
+
+// buildLibraryIndexBody encodes the full /library envelope once — the
+// categories list plus every palette in wire shape.
+func buildLibraryIndexBody(idx *library.Index) ([]byte, error) {
+	cats := idx.Categories()
+	catsOut := make([]libraryCategoryJSON, len(cats))
+	for i, c := range cats {
+		catsOut[i] = libraryCategoryJSON{Slug: c.Slug, Name: c.Name, Count: c.Count}
+	}
+	all := idx.All()
+	palOut := make([]libraryPaletteJSON, 0, len(all))
+	for _, lp := range all {
+		encoded, err := encodeLibraryPalette(lp)
+		if err != nil {
+			return nil, err
+		}
+		palOut = append(palOut, encoded)
+	}
+	return marshalEnvelope("library.index", nil, libraryIndexResult{
+		Categories: catsOut,
+		Palettes:   palOut,
+	})
+}
+
+// etagMatches reports whether the comma-separated If-None-Match header
+// covers etag. "*" matches anything; otherwise each candidate is
+// compared verbatim — the client only ever echoes back what we sent.
+func etagMatches(inm, etag string) bool {
+	inm = strings.TrimSpace(inm)
+	if inm == "" || etag == "" {
+		return false
+	}
+	if inm == "*" {
+		return true
+	}
+	for part := range strings.SplitSeq(inm, ",") {
+		if strings.TrimSpace(part) == etag {
+			return true
+		}
+	}
+	return false
 }
 
 func libraryByCategoryHandler(idx *library.Index) http.HandlerFunc {

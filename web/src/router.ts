@@ -10,7 +10,11 @@ const routes: RouteRecordRaw[] = [
     meta: { label: 'Generate' },
   },
   {
-    path: '/library',
+    // Optional `:id` deep-links a single palette (/library/aurora)
+    // without remounting the view — `/library` and `/library/:id`
+    // resolve to the same component, so the workspace store and the
+    // loaded catalogue survive selection.
+    path: '/library/:id?',
     name: 'library',
     component: () => import('./views/LibraryView.vue'),
     meta: { label: 'Library' },

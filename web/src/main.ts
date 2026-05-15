@@ -4,6 +4,7 @@ import PrimeVue from 'primevue/config';
 
 import './styles/reset.css';
 import './styles/theme.css';
+import './echarts';
 
 import App from './App.vue';
 import { router } from './router';

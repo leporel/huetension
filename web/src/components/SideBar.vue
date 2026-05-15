@@ -62,7 +62,6 @@ const groups = computed<SideGroup[]>(() => [
     items: [
       { key: 'browse', label: 'Browse palettes', icon: 'book', to: '/library' },
       { key: 'categories', label: 'Categories', icon: 'list', to: '/library' },
-      { key: 'saved', label: 'Saved', icon: 'heart', to: '/library' },
     ],
   },
 ]);

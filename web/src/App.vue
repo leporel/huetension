@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import TopBar from './components/TopBar.vue';
 import SideBar from './components/SideBar.vue';
+import { useWorkspaceShortcuts } from './composables/useWorkspaceShortcuts';
+
+// Global Ctrl/Cmd+Z undo · Ctrl/Cmd+Shift+Z / Ctrl+Y redo for the
+// workspace palette — one listener covers every card.
+useWorkspaceShortcuts();
 </script>
 
 <template>

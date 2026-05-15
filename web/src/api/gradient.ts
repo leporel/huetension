@@ -1,13 +1,17 @@
 import { api, type RequestOptions } from './client';
 import type { PaletteEnvelope } from './types';
 
+/** Interpolation spaces accepted by the Go gradient engine. */
+export type GradientSpace = 'oklch' | 'oklab' | 'lab' | 'hsl' | 'rgb';
+export type GradientEasing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+
 export interface GradientOptions {
   from?: string;
   to?: string;
   stops?: string; // comma-separated colors (mutually exclusive with from/to)
   steps: number;
-  space?: 'oklch' | 'oklab' | 'lab' | 'lch' | 'hsl' | 'srgb';
-  easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
+  space?: GradientSpace;
+  easing?: GradientEasing;
 }
 
 /** GET /api/v1/gradient. */
