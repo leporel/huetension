@@ -10,6 +10,8 @@ import (
 	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/leporel/huetension/internal/httputil"
 )
 
 // httpTestSetup boots a streamable HTTP handler in front of an isolated
@@ -28,8 +30,8 @@ func httpTestSetup(t *testing.T, cfg Config) (string, func()) {
 	mux.Handle(base+"/", h)
 
 	var handler http.Handler = mux
-	handler = withCORS(cfg.CORSOrigins, handler)
-	handler = withBearerAuth(cfg.AuthToken, handler)
+	handler = httputil.WithCORS(cfg.CORSOrigins, handler)
+	handler = httputil.WithBearerAuth(cfg.AuthToken, handler)
 
 	ts := httptest.NewServer(handler)
 	return ts.URL + base, ts.Close
@@ -234,7 +236,7 @@ func TestIsLoopbackAddr(t *testing.T) {
 		{"example.com:7337", false},
 	}
 	for _, c := range cases {
-		if got := isLoopbackAddr(c.addr); got != c.loopback {
+		if got := httputil.IsLoopbackAddr(c.addr); got != c.loopback {
 			t.Errorf("%q: got %v, want %v", c.addr, got, c.loopback)
 		}
 	}

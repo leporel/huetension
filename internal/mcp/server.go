@@ -26,7 +26,8 @@ func depsFromConfig(cfg Config, logger *slog.Logger) tools.Deps {
 			MaxImageBytes:        cfg.MaxImageBytes,
 			BlockPrivateNetworks: cfg.BlockPrivateNetworks,
 		},
-		Logger: logger,
+		Library: cfg.Library,
+		Logger:  logger,
 	}
 }
 

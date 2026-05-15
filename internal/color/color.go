@@ -14,14 +14,32 @@ import (
 	colorful "github.com/lucasb-eyer/go-colorful"
 )
 
+// Source records the image-space coordinate (0..1 on both axes, origin
+// top-left) of a representative pixel that a palette color was sampled
+// from. Populated by extract.AnnotateSources for palettes produced from
+// images; nil for every other origin (hex parse, harmony generation,
+// gradient interpolation, library lookup).
+//
+// Kept here rather than in palette/ so it can live as a field on Color
+// without forcing palette to import color and vice versa.
+type Source struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
 // Color is the canonical sRGB color used throughout huetension.
 //
 // A is 255 for opaque colors; Freq is optional metadata (0..1) attached by
 // palette extractors and is ignored by parsers, formatters, and conversions.
+// Source is an optional pin coordinate attached by image extraction so the
+// Web UI can show a Kuler-style pin on the source image; nil for non-image
+// colors. Palette operations (sort / harmony / gradient) pass Source
+// through unchanged via struct copy — the pointer travels with its color.
 type Color struct {
 	R, G, B uint8
 	A       uint8
 	Freq    float64
+	Source  *Source
 }
 
 // New returns an opaque Color.

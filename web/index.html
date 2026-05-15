@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <title>huetension</title>
+    <script>
+      // Resolve the persisted theme before first paint so reloads don't
+      // flash the wrong tokens. Keeps the runtime store as the single
+      // source of truth; this script only seeds the initial attribute.
+      // useStorage (vueuse) writes raw strings for string defaults, so
+      // localStorage holds 'light' / 'dark' / 'system' verbatim.
+      (function () {
+        try {
+          var stored = localStorage.getItem('huetension:theme');
+          var resolved;
+          if (stored === 'light' || stored === 'dark') {
+            resolved = stored;
+          } else {
+            resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', resolved);
+        } catch (_e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

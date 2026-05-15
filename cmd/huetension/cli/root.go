@@ -5,15 +5,18 @@
 // tree is easy to grow.
 //
 // Configuration precedence: explicit flag → env var (HUETENSION_*) → config
-// file (--config or $HOME/.huetension.yaml) → built-in defaults. This is the
+// file (config.yaml inside --data-dir, defaulting to the user config
+// directory and creating it when missing) → built-in defaults. This is the
 // usual viper layering and lets users keep host allowlists, default export
-// formats, etc. in a single YAML file.
+// formats, etc. in a single YAML file. The same data dir also holds
+// library.json for user-added palettes; see data_dir.go.
 package cli
 
 import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -23,7 +26,7 @@ import (
 const envPrefix = "HUETENSION"
 
 var (
-	cfgFile string
+	dataDir string
 	version = "dev"
 	// noColor is the global --no-color toggle. It's read by cliutil's
 	// rendering helpers via the Options struct. Defaults to false (colors
@@ -64,7 +67,7 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: false,
 	}
 
-	root.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default $HOME/.huetension.yaml)")
+	root.PersistentFlags().StringVar(&dataDir, "data-dir", "", "data directory holding "+configFilename+" + "+libraryFilename+" (default: "+userConfigDirHint()+", created when missing)")
 	root.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable ANSI color escape sequences in text output")
 	root.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "suppress the header line in text-mode output (no effect on JSON)")
 
@@ -81,35 +84,49 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newCSSCmd())
 	root.AddCommand(newTailwindCmd())
 	root.AddCommand(newMCPCmd())
+	root.AddCommand(newWebCmd())
 	root.AddCommand(newCompletionCmd())
 	root.AddCommand(newVersionCmd())
 	return root
 }
 
 func initConfig() {
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			viper.AddConfigPath(home)
-		}
-		viper.AddConfigPath(".")
-		viper.SetConfigName(".huetension")
-		viper.SetConfigType("yaml")
-	}
-
 	viper.SetEnvPrefix(envPrefix)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 	viper.AutomaticEnv()
 
-	// Missing config file is not an error — it's the common case.
+	dir, err := resolveDataDir(dataDir)
+	if err != nil {
+		// Surface --data-dir typos / missing dirs but don't abort —
+		// every command can still run on built-in defaults.
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+		return
+	}
+	if dir == "" {
+		return
+	}
+	cfgPath := filepath.Join(dir, configFilename)
+	info, statErr := os.Stat(cfgPath)
+	if statErr != nil || info.IsDir() {
+		// No config.yaml in the resolved dir — common case before
+		// any user customisation. Move on without warning.
+		return
+	}
+	viper.SetConfigFile(cfgPath)
 	if err := viper.ReadInConfig(); err != nil {
 		var notFound viper.ConfigFileNotFoundError
 		if !errors.As(err, &notFound) {
-			fmt.Fprintf(os.Stderr, "warning: reading config: %v\n", err)
+			fmt.Fprintf(os.Stderr, "warning: reading %s: %v\n", cfgPath, err)
 		}
 	}
+}
+
+// userConfigDirHint returns the expanded default path used in --data-dir help.
+func userConfigDirHint() string {
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".config", "huetension")
+	}
+	return "~/.config/huetension"
 }
 
 func newVersionCmd() *cobra.Command {

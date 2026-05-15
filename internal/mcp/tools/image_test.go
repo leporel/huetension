@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/leporel/huetension/internal/sandbox"
 )
 
 // makeTinyPNG generates a deterministic 4x4 PNG with two distinct colors.
@@ -302,7 +304,7 @@ func TestImageExtractRedirectCap(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected redirect cap to abort the loop")
 	}
-	if !strings.Contains(err.Error(), fmt.Sprintf("%d redirects", imageHTTPMaxRedirects)) {
+	if !strings.Contains(err.Error(), fmt.Sprintf("%d redirects", sandbox.HTTPMaxRedirects)) {
 		t.Errorf("error %q should mention the redirect cap", err)
 	}
 }

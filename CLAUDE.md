@@ -42,7 +42,7 @@ Extract methods MUST be reproducible across runs and processes. Two non-obvious 
 - `-o FILE` extension inference: if `--format` is unset, the extension on `-o` picks the format (`-o swatch.png` → PNG, `-o brand.css` → CSS).
 - Stdin readers: `convert` / `sort` / `css` / `tailwind` / `blindness` read one color per line from stdin when no positional args are given.
 - Exit codes follow Pylette: `0` ok, `1` total failure, `2` partial failure. Partial failures propagate via the `errPartialFailure` sentinel in `cmd/huetension/cli/stdin.go`.
-- Globals: `--no-color` (also honours `NO_COLOR` env), `--quiet`/`-q` (suppresses text-mode header), `--config FILE` (viper config).
+- Globals: `--no-color` (also honours `NO_COLOR` env), `--quiet`/`-q` (suppresses text-mode header), `--data-dir DIR` (viper config + palette library; expects `config.yaml` and/or `library.json` inside; auto-discovers from `<exe-dir>` → `<user-config>/huetension` → cwd; also honours `HUETENSION_DATA_DIR` env).
 
 ## dependencies
 

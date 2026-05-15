@@ -1,0 +1,617 @@
+[
+  {
+    "type": "complementary",
+    "base": "#6D5AFE",
+    "count": 2,
+    "result": [
+      "#6d5afe",
+      "#ebfe5a"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#6D5AFE",
+    "count": 3,
+    "result": [
+      "#6d5afe",
+      "#fe6d5a",
+      "#5afe6d"
+    ]
+  },
+  {
+    "type": "split-complementary",
+    "base": "#6D5AFE",
+    "count": 3,
+    "result": [
+      "#6d5afe",
+      "#febf5a",
+      "#99fe5a"
+    ]
+  },
+  {
+    "type": "tetradic",
+    "base": "#6D5AFE",
+    "count": 4,
+    "result": [
+      "#6d5afe",
+      "#fe5a99",
+      "#ebfe5a",
+      "#5afebf"
+    ]
+  },
+  {
+    "type": "double-complementary",
+    "base": "#6D5AFE",
+    "count": 4,
+    "result": [
+      "#6d5afe",
+      "#fe5aeb",
+      "#ebfe5a",
+      "#5afe6d"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#6D5AFE",
+    "count": 4,
+    "result": [
+      "#6d5afe",
+      "#ebfe5a",
+      "#6d5aff",
+      "#ecff5a"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#6D5AFE",
+    "count": 6,
+    "result": [
+      "#6d5afe",
+      "#fe6d5a",
+      "#5afe6d",
+      "#6d5aff",
+      "#ff6d5a",
+      "#5aff6d"
+    ]
+  },
+  {
+    "type": "tetradic",
+    "base": "#6D5AFE",
+    "count": 6,
+    "result": [
+      "#6d5afe",
+      "#fe5a99",
+      "#ebfe5a",
+      "#5afebf",
+      "#6d5aff",
+      "#ff5a9a"
+    ]
+  },
+  {
+    "type": "analogous",
+    "base": "#6D5AFE",
+    "count": 3,
+    "step": 30,
+    "result": [
+      "#5a99fe",
+      "#6d5afe",
+      "#bf5afe"
+    ]
+  },
+  {
+    "type": "monochromatic",
+    "base": "#6D5AFE",
+    "count": 5,
+    "result": [
+      "#1701be",
+      "#2a0efe",
+      "#6d5afe",
+      "#b0a6fe",
+      "#d2ccff"
+    ]
+  },
+  {
+    "type": "shades",
+    "base": "#6D5AFE",
+    "count": 5,
+    "result": [
+      "#6d5afe",
+      "#270bfe",
+      "#1601b8",
+      "#0d0168",
+      "#030019"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#FFA94D",
+    "count": 2,
+    "result": [
+      "#ffa94d",
+      "#4da3ff"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#FFA94D",
+    "count": 3,
+    "result": [
+      "#ffa94d",
+      "#4dffa9",
+      "#a94dff"
+    ]
+  },
+  {
+    "type": "split-complementary",
+    "base": "#FFA94D",
+    "count": 3,
+    "result": [
+      "#ffa94d",
+      "#4dfcff",
+      "#504dff"
+    ]
+  },
+  {
+    "type": "tetradic",
+    "base": "#FFA94D",
+    "count": 4,
+    "result": [
+      "#ffa94d",
+      "#4dff50",
+      "#4da3ff",
+      "#ff4dfc"
+    ]
+  },
+  {
+    "type": "double-complementary",
+    "base": "#FFA94D",
+    "count": 4,
+    "result": [
+      "#ffa94d",
+      "#a3ff4d",
+      "#4da3ff",
+      "#a94dff"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#FFA94D",
+    "count": 4,
+    "result": [
+      "#ffa94d",
+      "#4da3ff",
+      "#ffa94d",
+      "#4da3ff"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#FFA94D",
+    "count": 6,
+    "result": [
+      "#ffa94d",
+      "#4dffa9",
+      "#a94dff",
+      "#ffa94d",
+      "#4dffa9",
+      "#a94dff"
+    ]
+  },
+  {
+    "type": "tetradic",
+    "base": "#FFA94D",
+    "count": 6,
+    "result": [
+      "#ffa94d",
+      "#4dff50",
+      "#4da3ff",
+      "#ff4dfc",
+      "#ffa94d",
+      "#4dff50"
+    ]
+  },
+  {
+    "type": "analogous",
+    "base": "#FFA94D",
+    "count": 3,
+    "step": 30,
+    "result": [
+      "#ff504d",
+      "#ffa94d",
+      "#fcff4d"
+    ]
+  },
+  {
+    "type": "monochromatic",
+    "base": "#FFA94D",
+    "count": 5,
+    "result": [
+      "#b35d00",
+      "#ff8400",
+      "#ffa94d",
+      "#ffce9a",
+      "#ffe6cc"
+    ]
+  },
+  {
+    "type": "shades",
+    "base": "#FFA94D",
+    "count": 5,
+    "result": [
+      "#ffa94d",
+      "#ff8400",
+      "#b35c00",
+      "#663500",
+      "#1a0d00"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#0F172A",
+    "count": 2,
+    "result": [
+      "#0f172a",
+      "#2a220f"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#0F172A",
+    "count": 3,
+    "result": [
+      "#0f172a",
+      "#2a0f17",
+      "#172a0f"
+    ]
+  },
+  {
+    "type": "split-complementary",
+    "base": "#0F172A",
+    "count": 3,
+    "result": [
+      "#0f172a",
+      "#2a140f",
+      "#242a0f"
+    ]
+  },
+  {
+    "type": "tetradic",
+    "base": "#0F172A",
+    "count": 4,
+    "result": [
+      "#0f172a",
+      "#2a0f25",
+      "#2a220f",
+      "#0f2a15"
+    ]
+  },
+  {
+    "type": "double-complementary",
+    "base": "#0F172A",
+    "count": 4,
+    "result": [
+      "#0f172a",
+      "#220f2a",
+      "#2a220f",
+      "#172a0f"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#0F172A",
+    "count": 4,
+    "result": [
+      "#0f172a",
+      "#2a220f",
+      "#21335d",
+      "#5d4b21"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#0F172A",
+    "count": 6,
+    "result": [
+      "#0f172a",
+      "#2a0f17",
+      "#172a0f",
+      "#21335d",
+      "#5d2133",
+      "#335d21"
+    ]
+  },
+  {
+    "type": "tetradic",
+    "base": "#0F172A",
+    "count": 6,
+    "result": [
+      "#0f172a",
+      "#2a0f25",
+      "#2a220f",
+      "#0f2a15",
+      "#21335d",
+      "#5d2152"
+    ]
+  },
+  {
+    "type": "analogous",
+    "base": "#0F172A",
+    "count": 3,
+    "step": 30,
+    "result": [
+      "#0f242a",
+      "#0f172a",
+      "#140f2a"
+    ]
+  },
+  {
+    "type": "monochromatic",
+    "base": "#0F172A",
+    "count": 5,
+    "result": [
+      "#0d1526",
+      "#0d1526",
+      "#0f172a",
+      "#233662",
+      "#37559b"
+    ]
+  },
+  {
+    "type": "shades",
+    "base": "#0F172A",
+    "count": 5,
+    "result": [
+      "#0f172a",
+      "#0d1424",
+      "#0b111e",
+      "#090d19",
+      "#070a13"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#FFFFFF",
+    "count": 2,
+    "result": [
+      "#ffffff",
+      "#ffffff"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#FFFFFF",
+    "count": 3,
+    "result": [
+      "#ffffff",
+      "#ffffff",
+      "#ffffff"
+    ]
+  },
+  {
+    "type": "split-complementary",
+    "base": "#FFFFFF",
+    "count": 3,
+    "result": [
+      "#ffffff",
+      "#ffffff",
+      "#ffffff"
+    ]
+  },
+  {
+    "type": "tetradic",
+    "base": "#FFFFFF",
+    "count": 4,
+    "result": [
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff"
+    ]
+  },
+  {
+    "type": "double-complementary",
+    "base": "#FFFFFF",
+    "count": 4,
+    "result": [
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#FFFFFF",
+    "count": 4,
+    "result": [
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#FFFFFF",
+    "count": 6,
+    "result": [
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff"
+    ]
+  },
+  {
+    "type": "tetradic",
+    "base": "#FFFFFF",
+    "count": 6,
+    "result": [
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#ffffff"
+    ]
+  },
+  {
+    "type": "analogous",
+    "base": "#FFFFFF",
+    "count": 3,
+    "step": 30,
+    "result": [
+      "#ffffff",
+      "#ffffff",
+      "#ffffff"
+    ]
+  },
+  {
+    "type": "monochromatic",
+    "base": "#FFFFFF",
+    "count": 5,
+    "result": [
+      "#b3b3b3",
+      "#d9d9d9",
+      "#ffffff",
+      "#e6e6e6",
+      "#e6e6e6"
+    ]
+  },
+  {
+    "type": "shades",
+    "base": "#FFFFFF",
+    "count": 5,
+    "result": [
+      "#ffffff",
+      "#c2c2c2",
+      "#868686",
+      "#494949",
+      "#0d0d0d"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#000000",
+    "count": 2,
+    "result": [
+      "#000000",
+      "#000000"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#000000",
+    "count": 3,
+    "result": [
+      "#000000",
+      "#000000",
+      "#000000"
+    ]
+  },
+  {
+    "type": "split-complementary",
+    "base": "#000000",
+    "count": 3,
+    "result": [
+      "#000000",
+      "#000000",
+      "#000000"
+    ]
+  },
+  {
+    "type": "tetradic",
+    "base": "#000000",
+    "count": 4,
+    "result": [
+      "#000000",
+      "#000000",
+      "#000000",
+      "#000000"
+    ]
+  },
+  {
+    "type": "double-complementary",
+    "base": "#000000",
+    "count": 4,
+    "result": [
+      "#000000",
+      "#000000",
+      "#000000",
+      "#000000"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#000000",
+    "count": 4,
+    "result": [
+      "#000000",
+      "#000000",
+      "#333333",
+      "#333333"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#000000",
+    "count": 6,
+    "result": [
+      "#000000",
+      "#000000",
+      "#000000",
+      "#333333",
+      "#333333",
+      "#333333"
+    ]
+  },
+  {
+    "type": "tetradic",
+    "base": "#000000",
+    "count": 6,
+    "result": [
+      "#000000",
+      "#000000",
+      "#000000",
+      "#000000",
+      "#333333",
+      "#333333"
+    ]
+  },
+  {
+    "type": "analogous",
+    "base": "#000000",
+    "count": 3,
+    "step": 30,
+    "result": [
+      "#000000",
+      "#000000",
+      "#000000"
+    ]
+  },
+  {
+    "type": "monochromatic",
+    "base": "#000000",
+    "count": 5,
+    "result": [
+      "#1a1a1a",
+      "#1a1a1a",
+      "#000000",
+      "#262626",
+      "#4d4d4d"
+    ]
+  },
+  {
+    "type": "shades",
+    "base": "#000000",
+    "count": 5,
+    "result": [
+      "#000000",
+      "#030303",
+      "#060606",
+      "#0a0a0a",
+      "#0d0d0d"
+    ]
+  }
+]

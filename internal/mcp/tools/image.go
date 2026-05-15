@@ -5,119 +5,15 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net"
-	"net/http"
 	"strings"
-	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/leporel/huetension/internal/extract"
 	"github.com/leporel/huetension/internal/imageio"
 	"github.com/leporel/huetension/internal/palette"
+	"github.com/leporel/huetension/internal/sandbox"
 )
-
-// HTTP hardening per .prompts/01-phase2-mcp.md §8.
-const (
-	imageHTTPConnectTimeout = 5 * time.Second
-	imageHTTPTotalTimeout   = 30 * time.Second
-	imageHTTPMaxRedirects   = 5
-)
-
-// hardenedHTTPClient builds an http.Client with the constraints documented
-// in the phase 2 plan: 5s connect, 30s total, redirect cap 5, and (when
-// allowHosts is non-empty) per-redirect host re-validation against the
-// allowlist. The original URL is also gated by imageio.loadURL before any
-// network call, so the redirect re-check exists only to defeat
-// allowed-host → arbitrary-host redirect bypasses.
-//
-// When sandbox.BlockPrivateNetworks is true, the dialer also refuses TCP
-// connections to loopback / private / link-local IPs — closing the SSRF
-// gap that, in stdio mode, the local user is trusted not to exploit.
-//
-// file:// is rejected by the standard library when DialContext refuses to
-// service the scheme; URLs without http/https are screened in
-// imageio.Load's prefix dispatch as well.
-func hardenedHTTPClient(sandbox ImageSandbox) *http.Client {
-	dialer := &net.Dialer{
-		Timeout:   imageHTTPConnectTimeout,
-		KeepAlive: 30 * time.Second,
-	}
-	dialContext := dialer.DialContext
-	if sandbox.BlockPrivateNetworks {
-		dialContext = blockPrivateDial(dialer)
-	}
-	transport := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           dialContext,
-		TLSHandshakeTimeout:   imageHTTPConnectTimeout,
-		ResponseHeaderTimeout: imageHTTPTotalTimeout,
-		ExpectContinueTimeout: imageHTTPConnectTimeout,
-	}
-	hosts := append([]string(nil), sandbox.AllowHosts...)
-	return &http.Client{
-		Transport: transport,
-		Timeout:   imageHTTPTotalTimeout,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= imageHTTPMaxRedirects {
-				return fmt.Errorf("stopped after %d redirects", imageHTTPMaxRedirects)
-			}
-			if len(hosts) > 0 {
-				if err := imageio.CheckHost(req.URL.String(), hosts); err != nil {
-					return fmt.Errorf("redirect rejected: %w", err)
-				}
-			}
-			return nil
-		},
-	}
-}
-
-// blockPrivateDial wraps a net.Dialer so connections to loopback, RFC1918
-// private, link-local, and multicast IPs are refused. The dial step
-// receives the resolved IP, so DNS rebinding ("good" hostname → 127.0.0.1)
-// is also caught here.
-func blockPrivateDial(dialer *net.Dialer) func(ctx context.Context, network, address string) (net.Conn, error) {
-	return func(ctx context.Context, network, address string) (net.Conn, error) {
-		host, port, err := net.SplitHostPort(address)
-		if err != nil {
-			return nil, fmt.Errorf("ssrf check: %w", err)
-		}
-		// Resolve names to IPs so DNS-based rebinding can't slip past.
-		ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
-		if err != nil {
-			return nil, fmt.Errorf("ssrf resolve %q: %w", host, err)
-		}
-		for _, ip := range ips {
-			if ipIsBlocked(ip) {
-				return nil, fmt.Errorf("ssrf: refused connection to %s (private/loopback/link-local IP)", ip)
-			}
-		}
-		// Re-dial using the first allowed IP. Iteration here mirrors the
-		// happy-eyeballs ordering net.Dialer would do; for our purposes
-		// "first that works" is fine.
-		var lastErr error
-		for _, ip := range ips {
-			conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-			if err == nil {
-				return conn, nil
-			}
-			lastErr = err
-		}
-		if lastErr != nil {
-			return nil, lastErr
-		}
-		return nil, fmt.Errorf("no addresses available for %s", host)
-	}
-}
-
-func ipIsBlocked(ip net.IP) bool {
-	return ip.IsLoopback() ||
-		ip.IsPrivate() ||
-		ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() ||
-		ip.IsInterfaceLocalMulticast() ||
-		ip.IsUnspecified()
-}
 
 // ImageExtractParams is the typed input for image.extract. Exactly one of
 // Path, URL, Data must be set.
@@ -231,22 +127,10 @@ func clampAlphaThreshold(v int) uint8 {
 	return uint8(v)
 }
 
-// loadOptionsFor builds the imageio.LoadOptions used by every image.* tool
-// call. Sandbox knobs map directly; the HTTP client is the hardened one
-// from hardenedHTTPClient.
-func loadOptionsFor(sandbox ImageSandbox) imageio.LoadOptions {
-	return imageio.LoadOptions{
-		MaxBytes:     sandbox.MaxImageBytes,
-		Timeout:      imageHTTPTotalTimeout,
-		AllowedHosts: sandbox.AllowHosts,
-		HTTPClient:   hardenedHTTPClient(sandbox),
-	}
-}
-
 // loadImageInput resolves an ImageExtractParams into an *imageio.Loaded,
 // applying sandbox checks against the chosen source. Exactly one of
 // Path/URL/Data must be set.
-func loadImageInput(p ImageExtractParams, sandbox ImageSandbox) (*imageio.Loaded, error) {
+func loadImageInput(p ImageExtractParams, sb ImageSandbox) (*imageio.Loaded, error) {
 	setCount := 0
 	if p.Path != "" {
 		setCount++
@@ -266,11 +150,11 @@ func loadImageInput(p ImageExtractParams, sandbox ImageSandbox) (*imageio.Loaded
 		return nil, errors.New("path, url, and data are mutually exclusive")
 	}
 
-	ioOpts := loadOptionsFor(sandbox)
+	ioOpts := sandbox.LoadOptionsFor(sb)
 
 	switch {
 	case p.Path != "":
-		abs, err := sandbox.CheckPath(p.Path)
+		abs, err := sb.CheckPath(p.Path)
 		if err != nil {
 			return nil, err
 		}
@@ -291,7 +175,7 @@ func loadImageInput(p ImageExtractParams, sandbox ImageSandbox) (*imageio.Loaded
 		if err != nil {
 			return nil, fmt.Errorf("base64 decode: %w", err)
 		}
-		max := sandbox.MaxImageBytes
+		max := sb.MaxImageBytes
 		if max == 0 {
 			max = imageio.DefaultMaxBytes
 		}
@@ -305,19 +189,19 @@ func loadImageInput(p ImageExtractParams, sandbox ImageSandbox) (*imageio.Loaded
 // loadBatchSource resolves a single batch source string with sandbox checks.
 // Recognises the same prefixes imageio.Load does (data: / http(s):// / path).
 // Raw base64 (no data: prefix) is rejected here — see ImageExtractBatchParams.
-func loadBatchSource(source string, sandbox ImageSandbox) (*imageio.Loaded, error) {
+func loadBatchSource(source string, sb ImageSandbox) (*imageio.Loaded, error) {
 	src := strings.TrimSpace(source)
 	if src == "" {
 		return nil, errors.New("empty source")
 	}
-	ioOpts := loadOptionsFor(sandbox)
+	ioOpts := sandbox.LoadOptionsFor(sb)
 	switch {
 	case strings.HasPrefix(src, "data:"):
 		return imageio.Load(src, ioOpts)
 	case strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://"):
 		return imageio.Load(src, ioOpts)
 	default:
-		abs, err := sandbox.CheckPath(src)
+		abs, err := sb.CheckPath(src)
 		if err != nil {
 			return nil, err
 		}
@@ -325,12 +209,12 @@ func loadBatchSource(source string, sandbox ImageSandbox) (*imageio.Loaded, erro
 	}
 }
 
-func handleImageExtract(ctx context.Context, p ImageExtractParams, sandbox ImageSandbox) (*sdk.CallToolResult, ImageExtractOutput, error) {
+func handleImageExtract(ctx context.Context, p ImageExtractParams, sb ImageSandbox) (*sdk.CallToolResult, ImageExtractOutput, error) {
 	opts, err := buildExtractOptions(p)
 	if err != nil {
 		return nil, ImageExtractOutput{}, err
 	}
-	loaded, err := loadImageInput(p, sandbox)
+	loaded, err := loadImageInput(p, sb)
 	if err != nil {
 		return nil, ImageExtractOutput{}, err
 	}
@@ -346,7 +230,7 @@ func handleImageExtract(ctx context.Context, p ImageExtractParams, sandbox Image
 	}, nil
 }
 
-func handleImageExtractBatch(ctx context.Context, p ImageExtractBatchParams, sandbox ImageSandbox) (*sdk.CallToolResult, ImageExtractBatchOutput, error) {
+func handleImageExtractBatch(ctx context.Context, p ImageExtractBatchParams, sb ImageSandbox) (*sdk.CallToolResult, ImageExtractBatchOutput, error) {
 	if len(p.Sources) == 0 {
 		return nil, ImageExtractBatchOutput{}, errors.New("sources is required")
 	}
@@ -377,7 +261,7 @@ func handleImageExtractBatch(ctx context.Context, p ImageExtractBatchParams, san
 	prep := make([]prepared, len(p.Sources))
 	successCount := 0
 	for i, src := range p.Sources {
-		l, err := loadBatchSource(src, sandbox)
+		l, err := loadBatchSource(src, sb)
 		prep[i] = prepared{source: src, loaded: l, err: err}
 		if err == nil {
 			successCount++
@@ -452,22 +336,22 @@ func handleImageExtractBatch(ctx context.Context, p ImageExtractBatchParams, san
 // over deps.ImageSandbox so the sandbox config is captured once at server
 // build time, not re-fetched per call.
 func RegisterImageExtract(srv *sdk.Server, deps Deps) {
-	sandbox := deps.ImageSandbox
+	sb := deps.ImageSandbox
 	sdk.AddTool(srv, &sdk.Tool{
 		Name:        "image.extract",
 		Description: "Extract a color palette from an image. Source is one of: local path (subject to read-only/root), http(s):// URL (subject to host allowlist), or base64 image bytes. For soft/softk methods, use 'soft_preset' to pick a Kuler-like mood (default|colorful|bright|muted|deep|dark).",
 	}, func(ctx context.Context, _ *sdk.CallToolRequest, p ImageExtractParams) (*sdk.CallToolResult, ImageExtractOutput, error) {
-		return handleImageExtract(ctx, p, sandbox)
+		return handleImageExtract(ctx, p, sb)
 	})
 }
 
 // RegisterImageExtractBatch installs image.extractBatch on srv.
 func RegisterImageExtractBatch(srv *sdk.Server, deps Deps) {
-	sandbox := deps.ImageSandbox
+	sb := deps.ImageSandbox
 	sdk.AddTool(srv, &sdk.Tool{
 		Name:        "image.extractBatch",
 		Description: "Extract palettes from multiple images in parallel. Per-source failures appear as 'error' fields on each entry; a total failure (every source rejected) is reported as a tool error. For soft/softk methods, use 'soft_preset' (default|colorful|bright|muted|deep|dark) — applied uniformly to all sources.",
 	}, func(ctx context.Context, _ *sdk.CallToolRequest, p ImageExtractBatchParams) (*sdk.CallToolResult, ImageExtractBatchOutput, error) {
-		return handleImageExtractBatch(ctx, p, sandbox)
+		return handleImageExtractBatch(ctx, p, sb)
 	})
 }

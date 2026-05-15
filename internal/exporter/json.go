@@ -41,23 +41,29 @@ type jsonResult struct {
 type jsonPalette struct {
 	Size   int         `json:"size"`
 	Name   string      `json:"name,omitempty"`
-	Colors []jsonColor `json:"colors"`
+	Colors []ColorJSON `json:"colors"`
 }
 
-// jsonColor is the on-the-wire shape of a single palette entry. We expand
+// ColorJSON is the on-the-wire shape of a single palette entry. We expand
 // to multiple representations so every consumer (web, design tools, code
 // generators) gets the form it wants without re-parsing.
 //
-// RGBA is a pointer because Go's encoding/json `omitempty` does not
-// recognise zero-valued fixed-size arrays — without the pointer indirection
-// every opaque color would carry a misleading `"rgba":[0,0,0,0]` field.
-type jsonColor struct {
-	Hex   string    `json:"hex"`
-	RGB   [3]uint8  `json:"rgb"`
-	RGBA  *[4]uint8 `json:"rgba,omitempty"`
-	HSL   [3]int    `json:"hsl"`
-	OkLCH [3]int    `json:"oklch"`
-	Freq  float64   `json:"freq,omitempty"`
+// Exposed (capitalised) so callers that emit non-palette JSON envelopes
+// (e.g. the blindness.simulate variant arrays in MCP and the Web API)
+// can share one canonical encoding instead of duplicating per consumer.
+//
+// RGBA / Source are pointers because Go's encoding/json `omitempty` does
+// not recognise zero-valued fixed-size arrays / nested struct values —
+// without the indirection every opaque color would carry a misleading
+// `"rgba":[0,0,0,0]` and `"source":{...zero...}` field.
+type ColorJSON struct {
+	Hex    string        `json:"hex"`
+	RGB    [3]uint8      `json:"rgb"`
+	RGBA   *[4]uint8     `json:"rgba,omitempty"`
+	HSL    [3]int        `json:"hsl"`
+	OkLCH  [3]int        `json:"oklch"`
+	Freq   float64       `json:"freq,omitempty"`
+	Source *color.Source `json:"source,omitempty"`
 }
 
 // renderJSON encodes p as a huetension/v1 envelope. opts.Pretty toggles
@@ -65,7 +71,7 @@ type jsonColor struct {
 // fields when the caller is the CLI or an MCP tool. Library callers can
 // leave them empty to get a clean palette-only envelope.
 func renderJSON(p *palette.Palette, opts Options) ([]byte, error) {
-	colors := make([]jsonColor, p.Len())
+	colors := make([]ColorJSON, p.Len())
 	for i, c := range p.Colors {
 		colors[i] = encodeColor(c)
 	}
@@ -109,15 +115,33 @@ func jsonMetadata(p *palette.Palette) *palette.Metadata {
 	return &m
 }
 
-func encodeColor(c color.Color) jsonColor {
+// EncodeColor produces the canonical JSON shape for a single color. It
+// shares logic with the palette envelope renderer so the
+// blindness.simulate variants (and any future non-palette JSON consumer)
+// emit colors identical to result.palette.colors.
+func EncodeColor(c color.Color) ColorJSON {
+	return encodeColor(c)
+}
+
+// EncodeColors batches EncodeColor over a slice.
+func EncodeColors(in []color.Color) []ColorJSON {
+	out := make([]ColorJSON, len(in))
+	for i, c := range in {
+		out[i] = encodeColor(c)
+	}
+	return out
+}
+
+func encodeColor(c color.Color) ColorJSON {
 	h, s, l := c.ToHSL()
 	okL, okC, okH := c.ToOkLCH()
-	out := jsonColor{
-		Hex:   c.Hex(),
-		RGB:   [3]uint8{c.R, c.G, c.B},
-		HSL:   [3]int{roundDeg(h), pct(s), pct(l)},
-		OkLCH: [3]int{pct(okL), pct(okC), roundDeg(okH)},
-		Freq:  c.Freq,
+	out := ColorJSON{
+		Hex:    c.Hex(),
+		RGB:    [3]uint8{c.R, c.G, c.B},
+		HSL:    [3]int{roundDeg(h), pct(s), pct(l)},
+		OkLCH:  [3]int{pct(okL), pct(okC), roundDeg(okH)},
+		Freq:   c.Freq,
+		Source: c.Source,
 	}
 	if c.A != 255 {
 		out.RGBA = &[4]uint8{c.R, c.G, c.B, c.A}

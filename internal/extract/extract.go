@@ -233,6 +233,10 @@ func Extract(ctx context.Context, img image.Image, opts Options) (*palette.Palet
 	}
 
 	p := palette.New(colors)
+	// AnnotateSources runs on the resized image — coords are normalised
+	// (0..1) so they map identically to the un-resized image in the UI.
+	// Done before Sort so colors carry their pins through reorder.
+	AnnotateSources(p, resized)
 	p.Metadata = palette.Metadata{
 		Method: string(opts.Method),
 		Params: extractParams(opts, fellBack),

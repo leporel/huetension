@@ -125,6 +125,11 @@ func runMCP(cmd *cobra.Command, mf *mcpFlags) error {
 		return err
 	}
 
+	lib, err := loadLibrary(dataDir)
+	if err != nil {
+		return err
+	}
+
 	cfg := huemcp.Config{
 		Version:              version,
 		Enable:               mf.enable,
@@ -140,6 +145,7 @@ func runMCP(cmd *cobra.Command, mf *mcpFlags) error {
 		AuthToken:            mf.authToken,
 		CORSOrigins:          mf.corsOrigins,
 		LogLevel:             mf.logLevel,
+		Library:              lib,
 	}
 
 	if mf.listTools {

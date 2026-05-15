@@ -21,14 +21,17 @@ type PaletteResult struct {
 	Metadata *palette.Metadata  `json:"metadata,omitempty" jsonschema:"provenance metadata recorded by the producer"`
 }
 
-// ColorEntry is one row of a palette in JSON. Matches exporter.jsonColor:
-// hex, integer rgb triple, percentage HSL, percentage OkLCH, optional freq.
+// ColorEntry is one row of a palette in JSON. Matches exporter.ColorJSON:
+// hex, integer rgb triple, percentage HSL, percentage OkLCH, optional freq,
+// and (when produced by image.extract) the normalised pin coordinate the
+// Web UI's Kuler-style overlay uses to place draggable color picks.
 type ColorEntry struct {
-	Hex   string   `json:"hex" jsonschema:"canonical hex (#rrggbb)"`
-	RGB   [3]uint8 `json:"rgb" jsonschema:"sRGB 8-bit channels"`
-	HSL   [3]int   `json:"hsl" jsonschema:"HSL [hue °, saturation %, lightness %]"`
-	OkLCH [3]int   `json:"oklch" jsonschema:"OkLCH [lightness %, chroma %, hue °]"`
-	Freq  float64  `json:"freq,omitempty" jsonschema:"frequency 0..1, populated for extracted palettes"`
+	Hex    string        `json:"hex" jsonschema:"canonical hex (#rrggbb)"`
+	RGB    [3]uint8      `json:"rgb" jsonschema:"sRGB 8-bit channels"`
+	HSL    [3]int        `json:"hsl" jsonschema:"HSL [hue °, saturation %, lightness %]"`
+	OkLCH  [3]int        `json:"oklch" jsonschema:"OkLCH [lightness %, chroma %, hue °]"`
+	Freq   float64       `json:"freq,omitempty" jsonschema:"frequency 0..1, populated for extracted palettes"`
+	Source *color.Source `json:"source,omitempty" jsonschema:"normalised (0..1) representative-pixel coordinate; populated only for image.extract output"`
 }
 
 // encodePalette converts a *palette.Palette into the wire-friendly
@@ -61,11 +64,12 @@ func encodeColor(c color.Color) ColorEntry {
 	h, s, l := c.ToHSL()
 	okL, okC, okH := c.ToOkLCH()
 	return ColorEntry{
-		Hex:   c.Hex(),
-		RGB:   [3]uint8{c.R, c.G, c.B},
-		HSL:   [3]int{roundDeg(h), pct(s), pct(l)},
-		OkLCH: [3]int{pct(okL), pct(okC), roundDeg(okH)},
-		Freq:  c.Freq,
+		Hex:    c.Hex(),
+		RGB:    [3]uint8{c.R, c.G, c.B},
+		HSL:    [3]int{roundDeg(h), pct(s), pct(l)},
+		OkLCH:  [3]int{pct(okL), pct(okC), roundDeg(okH)},
+		Freq:   c.Freq,
+		Source: c.Source,
 	}
 }
 

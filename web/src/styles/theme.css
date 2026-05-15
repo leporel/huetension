@@ -1,0 +1,104 @@
+/*
+ * Theme tokens. Mirrored from .prompts/exampleUI/example.html so the
+ * dark variant feels identical to the design source; the light variant
+ * is derived from the same hue (indigo 280) by inverting lightness and
+ * compressing chroma.
+ *
+ * Component CSS reads only these vars — no hard-coded oklch literals
+ * anywhere else. Theme switching is just `<html data-theme>` flipping.
+ */
+
+:root,
+[data-theme='dark'] {
+  /* indigo-tinted dark palette */
+  --bg-0: oklch(0.18 0.018 280);
+  --bg-1: oklch(0.215 0.020 280);
+  --bg-2: oklch(0.245 0.022 280);
+  --bg-3: oklch(0.295 0.024 280);
+  --line: oklch(0.34 0.022 280);
+  --line-soft: oklch(0.285 0.022 280);
+
+  --fg-0: oklch(0.97 0.005 280);
+  --fg-1: oklch(0.80 0.012 280);
+  --fg-2: oklch(0.62 0.014 280);
+  --fg-3: oklch(0.48 0.014 280);
+
+  --accent: oklch(0.66 0.20 280);
+  --accent-soft: oklch(0.66 0.20 280 / 0.18);
+  --accent-line: oklch(0.66 0.20 280 / 0.45);
+
+  --good: oklch(0.78 0.14 155);
+  --warn: oklch(0.82 0.14 85);
+  --bad: oklch(0.70 0.18 25);
+
+  --bg-ambient:
+    radial-gradient(1200px 600px at 80% -10%, oklch(0.66 0.20 280 / 0.08), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, oklch(0.55 0.18 320 / 0.06), transparent 60%);
+
+  /* Surface tints used by the sticky topbar / sidebar; intentionally
+     warmer than bg-0 (hue ~50) for subtle separation. Tokenised so
+     theme swaps stay var-driven. */
+  --topbar-bg: oklch(0.20 0.008 50 / 0.7);
+  --sidebar-bg: oklch(0.195 0.008 50 / 0.6);
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 18px;
+
+  --shadow-card:
+    0 1px 0 oklch(1 0 0 / 0.03) inset,
+    0 12px 28px -18px oklch(0 0 0 / 0.6);
+
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  --bg-0: oklch(0.985 0.004 280);
+  --bg-1: oklch(0.965 0.005 280);
+  --bg-2: oklch(0.945 0.006 280);
+  --bg-3: oklch(0.92 0.008 280);
+  --line: oklch(0.84 0.010 280);
+  --line-soft: oklch(0.90 0.008 280);
+
+  --fg-0: oklch(0.22 0.018 280);
+  --fg-1: oklch(0.36 0.014 280);
+  --fg-2: oklch(0.50 0.012 280);
+  --fg-3: oklch(0.62 0.010 280);
+
+  --accent: oklch(0.56 0.21 280);
+  --accent-soft: oklch(0.66 0.20 280 / 0.14);
+  --accent-line: oklch(0.66 0.20 280 / 0.40);
+
+  --good: oklch(0.58 0.16 155);
+  --warn: oklch(0.62 0.16 85);
+  --bad: oklch(0.55 0.20 25);
+
+  --bg-ambient:
+    radial-gradient(1200px 600px at 80% -10%, oklch(0.66 0.20 280 / 0.06), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, oklch(0.55 0.18 320 / 0.04), transparent 60%);
+
+  --topbar-bg: oklch(0.99 0.004 280 / 0.75);
+  --sidebar-bg: oklch(0.97 0.005 280 / 0.7);
+
+  --shadow-card:
+    0 1px 0 oklch(1 0 0 / 0.6) inset,
+    0 12px 28px -18px oklch(0 0 0 / 0.12);
+
+  color-scheme: light;
+}
+
+body {
+  font-family: 'Inter Tight', system-ui, sans-serif;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+  background: var(--bg-ambient), var(--bg-0);
+  color: var(--fg-0);
+  min-height: 100vh;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  letter-spacing: 0;
+}

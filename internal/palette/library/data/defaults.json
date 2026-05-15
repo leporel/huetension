@@ -1,0 +1,385 @@
+{
+  "schema": "huetension/v1",
+  "palettes": [
+    {
+      "id": "cobalt-studio",
+      "name": "Cobalt Studio",
+      "description": "Deep blue brand palette suited for SaaS marketing and product UI.",
+      "categories": ["Brand & Tech"],
+      "tags": ["dark", "cool", "ui", "brand"],
+      "colors": ["#0F172A", "#1E293B", "#3B82F6", "#22D3EE", "#F8FAFC"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "mint-api",
+      "name": "Mint API",
+      "description": "Calm teal-and-mint scheme used by API documentation sites.",
+      "categories": ["Brand & Tech"],
+      "tags": ["docs", "cool", "fresh"],
+      "colors": ["#0F2A2A", "#134E4A", "#10B981", "#A7F3D0", "#F0FDF4"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "iron-console",
+      "name": "Iron Console",
+      "description": "Neutral grayscale for terminals, dashboards and developer tools.",
+      "categories": ["Brand & Tech", "Design Systems"],
+      "tags": ["dark", "neutral", "console"],
+      "colors": ["#0A0A0A", "#1F1F1F", "#3F3F46", "#A1A1AA", "#FAFAFA"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "citrus-saas",
+      "name": "Citrus SaaS",
+      "description": "Bright citrus accents over warm cream — energetic but readable.",
+      "categories": ["Brand & Tech"],
+      "tags": ["warm", "energetic", "marketing"],
+      "colors": ["#FFFBEB", "#FCD34D", "#F59E0B", "#EA580C", "#7C2D12"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "velvet-fintech",
+      "name": "Velvet Fintech",
+      "description": "Indigo-to-violet stack favoured by financial dashboards.",
+      "categories": ["Brand & Tech"],
+      "tags": ["dark", "premium", "fintech"],
+      "colors": ["#1E1B4B", "#312E81", "#6366F1", "#A78BFA", "#FAFAFA"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "carbon-cloud",
+      "name": "Carbon Cloud",
+      "description": "Five-stop monochrome scale for cloud-infra dashboards.",
+      "categories": ["Brand & Tech", "Design Systems"],
+      "tags": ["neutral", "monochrome", "infra"],
+      "colors": ["#000000", "#262626", "#525252", "#D4D4D4", "#FFFFFF"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "magazine-warm",
+      "name": "Magazine Warm",
+      "description": "Warm neutrals with a cream highlight — long-form editorial feel.",
+      "categories": ["Editorial / Publishing"],
+      "tags": ["warm", "neutral", "editorial"],
+      "colors": ["#1C1917", "#57534E", "#A8A29E", "#FEF3C7", "#F5F5F4"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "duotone-noir",
+      "name": "Duotone Noir",
+      "description": "Black-and-ochre duotone reminiscent of mid-century print covers.",
+      "categories": ["Editorial / Publishing"],
+      "tags": ["duotone", "warm", "print"],
+      "colors": ["#0C0A09", "#292524", "#B45309", "#FCD34D", "#FFFBEB"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "broadsheet",
+      "name": "Broadsheet",
+      "description": "Newspaper grays anchored by a red kicker accent.",
+      "categories": ["Editorial / Publishing"],
+      "tags": ["neutral", "accent", "newspaper"],
+      "colors": ["#FAFAF9", "#E7E5E4", "#78716C", "#1C1917", "#B91C1C"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "gallery-cream",
+      "name": "Gallery Cream",
+      "description": "Off-white gallery backdrops with deep ink and ochre accents.",
+      "categories": ["Editorial / Publishing"],
+      "tags": ["warm", "minimal", "gallery"],
+      "colors": ["#FFFBEB", "#FEF3C7", "#FDE68A", "#7C2D12", "#1C1917"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "ocean-depth",
+      "name": "Ocean Depth",
+      "description": "Bathymetric blues — deep navy through to surf foam.",
+      "categories": ["Nature"],
+      "tags": ["blue", "cool", "water"],
+      "colors": ["#0C4A6E", "#075985", "#0EA5E9", "#7DD3FC", "#F0F9FF"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "desert-sunset",
+      "name": "Desert Sunset",
+      "description": "Warm sand-and-clay tones for landing pages with a long horizon.",
+      "categories": ["Nature"],
+      "tags": ["warm", "orange", "sunset"],
+      "colors": ["#7C2D12", "#C2410C", "#F97316", "#FED7AA", "#FFFBEB"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "alpine-frost",
+      "name": "Alpine Frost",
+      "description": "Frosted blues over inky shadow — great for winter campaigns.",
+      "categories": ["Nature"],
+      "tags": ["cool", "winter", "blue"],
+      "colors": ["#0F172A", "#1E40AF", "#60A5FA", "#E0F2FE", "#F8FAFC"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "savanna-gold",
+      "name": "Savanna Gold",
+      "description": "Burnished savanna palette layering ochre over umber.",
+      "categories": ["Nature"],
+      "tags": ["warm", "earth", "gold"],
+      "colors": ["#451A03", "#92400E", "#D97706", "#FCD34D", "#FEF3C7"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "teal-orange",
+      "name": "Teal & Orange",
+      "description": "Classic cinematic colour grade — complementary teal/orange split.",
+      "categories": ["Photography"],
+      "tags": ["complementary", "cinema", "high-contrast"],
+      "colors": ["#062F4F", "#0E7490", "#5EEAD4", "#FB923C", "#7C2D12"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "moody-noir",
+      "name": "Moody Noir",
+      "description": "Low-key noir grade built from warm grays and almost-black.",
+      "categories": ["Photography"],
+      "tags": ["dark", "noir", "neutral"],
+      "colors": ["#0A0A0A", "#1C1917", "#292524", "#57534E", "#A8A29E"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "pastel-film",
+      "name": "Pastel Film",
+      "description": "Soft pastels reminiscent of underexposed film stock.",
+      "categories": ["Photography", "Vintage / Retro"],
+      "tags": ["pastel", "soft", "film"],
+      "colors": ["#FCE7F3", "#FBCFE8", "#DDD6FE", "#A5B4FC", "#FECACA"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "tailwind-slate",
+      "name": "Tailwind Slate",
+      "description": "Tailwind's slate scale, sampled across the canonical 50/200/400/600/900 stops.",
+      "categories": ["Design Systems"],
+      "tags": ["neutral", "scale", "tailwind"],
+      "colors": ["#F8FAFC", "#E2E8F0", "#94A3B8", "#475569", "#0F172A"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "material-tonal",
+      "name": "Material Tonal",
+      "description": "Material You–style tonal palette anchored on a primary blue.",
+      "categories": ["Design Systems"],
+      "tags": ["tonal", "blue", "material"],
+      "colors": ["#001E2C", "#003547", "#0061A4", "#76D1FF", "#E0F2FE"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "radix-mauve",
+      "name": "Radix Mauve",
+      "description": "Radix-style mauve neutrals — slightly warm grays for content surfaces.",
+      "categories": ["Design Systems"],
+      "tags": ["neutral", "warm", "radix"],
+      "colors": ["#FDFCFD", "#F4F2F4", "#C8C7CB", "#85838B", "#1A1523"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "atlassian-blue",
+      "name": "Atlassian Blue",
+      "description": "Five-stop blue scale modelled on Atlassian's product palette.",
+      "categories": ["Design Systems"],
+      "tags": ["blue", "scale", "saas"],
+      "colors": ["#091E42", "#172B4D", "#0052CC", "#4C9AFF", "#DEEBFF"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "seventies-warm",
+      "name": "Seventies Warm",
+      "description": "Warm 1970s interior tones — burnt sienna through butter yellow.",
+      "categories": ["Vintage / Retro"],
+      "tags": ["warm", "70s", "interior"],
+      "colors": ["#7C2D12", "#A16207", "#CA8A04", "#FBBF24", "#FEF3C7"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "eighties-synthwave",
+      "name": "Eighties Synthwave",
+      "description": "Neon synthwave — magenta and cyan against a violet night.",
+      "categories": ["Vintage / Retro"],
+      "tags": ["neon", "80s", "synthwave"],
+      "colors": ["#1A0033", "#5B21B6", "#EC4899", "#F472B6", "#22D3EE"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "nineties-pastel",
+      "name": "Nineties Pastel",
+      "description": "Soft 1990s pastels — pop-art posters and Memphis prints.",
+      "categories": ["Vintage / Retro"],
+      "tags": ["pastel", "90s", "memphis"],
+      "colors": ["#FCE7F3", "#FBCFE8", "#A7F3D0", "#BAE6FD", "#FDE68A"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "art-deco",
+      "name": "Art Deco",
+      "description": "Lacquered teal paired with antique gold for an art-deco aesthetic.",
+      "categories": ["Vintage / Retro", "Editorial / Publishing"],
+      "tags": ["dark", "luxe", "deco"],
+      "colors": ["#0F172A", "#134E4A", "#0D9488", "#CA8A04", "#FEF3C7"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "high-contrast-ink",
+      "name": "High Contrast Ink",
+      "description": "Pure black/white anchors with three saturated accent hues that pass AAA on white or black.",
+      "categories": ["Accessibility"],
+      "tags": ["aaa", "neutral", "accent"],
+      "colors": ["#000000", "#FFFFFF", "#1D4ED8", "#15803D", "#B91C1C"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "aaa-warm-pair",
+      "name": "AAA Warm Pair",
+      "description": "Warm fg/bg pair (#1C1917 on #FAFAF9) plus tested accent stops.",
+      "categories": ["Accessibility"],
+      "tags": ["aaa", "warm", "pair"],
+      "colors": ["#1C1917", "#FAFAF9", "#92400E", "#FBBF24"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "aaa-cool-pair",
+      "name": "AAA Cool Pair",
+      "description": "Cool fg/bg pair (#0F172A on #F8FAFC) plus a tested blue accent.",
+      "categories": ["Accessibility"],
+      "tags": ["aaa", "cool", "pair"],
+      "colors": ["#0F172A", "#F8FAFC", "#1E40AF", "#67E8F9"],
+      "source": "huetension:builtin",
+      "license": "MIT"
+    },
+    {
+      "id": "arctic-frost",
+      "name": "Arctic Frost",
+      "description": "Cool, crisp winter-inspired theme — clarity, precision, professionalism.",
+      "categories": ["Theme-Factory", "Brand & Tech"],
+      "tags": ["cool", "clean", "winter"],
+      "colors": ["#D4E4F7", "#4A6FA5", "#C0C0C0", "#FAFAFA"],
+      "source": "theme-factory:arctic-frost",
+      "license": "MIT"
+    },
+    {
+      "id": "botanical-garden",
+      "name": "Botanical Garden",
+      "description": "Rich natural greens with bright marigold and earthy terracotta.",
+      "categories": ["Theme-Factory", "Nature"],
+      "tags": ["green", "warm", "natural"],
+      "colors": ["#4A7C59", "#F9A620", "#B7472A", "#F5F3ED"],
+      "source": "theme-factory:botanical-garden",
+      "license": "MIT"
+    },
+    {
+      "id": "desert-rose",
+      "name": "Desert Rose",
+      "description": "Soft dusty roses with clay and sand — earthy and warm.",
+      "categories": ["Theme-Factory", "Nature"],
+      "tags": ["warm", "earth", "rose"],
+      "colors": ["#D4A5A5", "#B87D6D", "#E8D5C4", "#5D2E46"],
+      "source": "theme-factory:desert-rose",
+      "license": "MIT"
+    },
+    {
+      "id": "forest-canopy",
+      "name": "Forest Canopy",
+      "description": "Deep forest greens through sage and olive to ivory backgrounds.",
+      "categories": ["Theme-Factory", "Nature"],
+      "tags": ["green", "natural", "calm"],
+      "colors": ["#2D4A2B", "#7D8471", "#A4AC86", "#FAF9F6"],
+      "source": "theme-factory:forest-canopy",
+      "license": "MIT"
+    },
+    {
+      "id": "golden-hour",
+      "name": "Golden Hour",
+      "description": "Warm mustard yellow and terracotta over chocolate-brown anchors.",
+      "categories": ["Theme-Factory", "Photography"],
+      "tags": ["warm", "golden", "sunset"],
+      "colors": ["#F4A900", "#C1666B", "#D4B896", "#4A403A"],
+      "source": "theme-factory:golden-hour",
+      "license": "MIT"
+    },
+    {
+      "id": "midnight-galaxy",
+      "name": "Midnight Galaxy",
+      "description": "Dramatic deep purples and cosmic blue with silver highlights.",
+      "categories": ["Theme-Factory", "Vintage / Retro"],
+      "tags": ["dark", "cosmic", "purple"],
+      "colors": ["#2B1E3E", "#4A4E8F", "#A490C2", "#E6E6FA"],
+      "source": "theme-factory:midnight-galaxy",
+      "license": "MIT"
+    },
+    {
+      "id": "modern-minimalist",
+      "name": "Modern Minimalist",
+      "description": "Charcoal-and-grey scale with white anchors — clean, minimal UI.",
+      "categories": ["Theme-Factory", "Design Systems"],
+      "tags": ["neutral", "minimal", "scale"],
+      "colors": ["#36454F", "#708090", "#D3D3D3", "#FFFFFF"],
+      "source": "theme-factory:modern-minimalist",
+      "license": "MIT"
+    },
+    {
+      "id": "ocean-depths",
+      "name": "Ocean Depths",
+      "description": "Deep navy with teal and seafoam highlights, cream text.",
+      "categories": ["Theme-Factory", "Nature"],
+      "tags": ["blue", "cool", "water"],
+      "colors": ["#1A2332", "#2D8B8B", "#A8DADC", "#F1FAEE"],
+      "source": "theme-factory:ocean-depths",
+      "license": "MIT"
+    },
+    {
+      "id": "sunset-boulevard",
+      "name": "Sunset Boulevard",
+      "description": "Warm burnt orange and coral against deep purple-teal anchors.",
+      "categories": ["Theme-Factory", "Photography"],
+      "tags": ["warm", "vibrant", "sunset"],
+      "colors": ["#E76F51", "#F4A261", "#E9C46A", "#264653"],
+      "source": "theme-factory:sunset-boulevard",
+      "license": "MIT"
+    },
+    {
+      "id": "tech-innovation",
+      "name": "Tech Innovation",
+      "description": "Electric blue and neon cyan over deep grey for high-tech surfaces.",
+      "categories": ["Theme-Factory", "Brand & Tech"],
+      "tags": ["dark", "neon", "tech"],
+      "colors": ["#0066FF", "#00FFFF", "#1E1E1E", "#FFFFFF"],
+      "source": "theme-factory:tech-innovation",
+      "license": "MIT"
+    }
+  ]
+}

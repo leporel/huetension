@@ -1,0 +1,6 @@
+node_modules/
+.vite/
+*.log
+.DS_Store
+
+# `dist/` is committed by design (Phase 4 owns the CI gate). Do not ignore.

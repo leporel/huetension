@@ -84,8 +84,8 @@ const (
 
 // AllSoftPresets is the canonical list of supported soft presets.
 var (
-	AllSoftPresets   = extract.AllSoftPresets
-	ParseSoftPreset  = extract.ParseSoftPreset
+	AllSoftPresets  = extract.AllSoftPresets
+	ParseSoftPreset = extract.ParseSoftPreset
 )
 
 const (
@@ -93,6 +93,7 @@ const (
 	MethodOkKMeans       = extract.MethodOkKMeans
 	MethodMedianCut      = extract.MethodMedianCut
 	MethodSoft           = extract.MethodSoft
+	MethodSoftK          = extract.MethodSoftK
 	MethodOctree         = extract.MethodOctree
 	MethodPopularity     = extract.MethodPopularity
 	MethodWu             = extract.MethodWu
@@ -153,15 +154,15 @@ const (
 )
 
 var (
-	BuildGradient    = gradient.Build
+	BuildGradient     = gradient.Build
 	MultiStopGradient = gradient.MultiStop
 )
 
 // Contrast surface — WCAG 2.1 ratio + APCA Lc score.
 type (
-	ContrastAlgo    = contrast.Algo
-	WCAG21Result    = contrast.WCAG21Result
-	APCAResult      = contrast.APCAResult
+	ContrastAlgo = contrast.Algo
+	WCAG21Result = contrast.WCAG21Result
+	APCAResult   = contrast.APCAResult
 )
 
 const (

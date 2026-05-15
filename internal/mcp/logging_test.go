@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/leporel/huetension/internal/httputil"
 )
 
 // TestLoggingMiddlewareEmitsCallEntry drives a tools/call through the
@@ -171,7 +173,7 @@ func TestWithAccessLog(t *testing.T) {
 		w.WriteHeader(http.StatusTeapot)
 		_, _ = io.WriteString(w, "ok")
 	})
-	wrapped := withAccessLog(logger, inner)
+	wrapped := httputil.WithAccessLog(logger, "mcp.http", inner)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/mcp/foo", nil)
@@ -206,7 +208,7 @@ func TestWithAccessLogNilLoggerIsNoop(t *testing.T) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	})
-	wrapped := withAccessLog(nil, inner)
+	wrapped := httputil.WithAccessLog(nil, "mcp.http", inner)
 
 	rec := httptest.NewRecorder()
 	wrapped.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))

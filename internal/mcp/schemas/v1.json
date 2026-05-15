@@ -90,6 +90,16 @@
           "minimum": 0,
           "maximum": 1,
           "description": "Frequency 0..1, populated for extracted palettes."
+        },
+        "source": {
+          "type": "object",
+          "description": "Optional. Normalised representative-pixel coordinate (origin top-left). Populated only for palettes extracted from images; used by the Web UI's Kuler-style pin overlay.",
+          "required": ["x", "y"],
+          "additionalProperties": false,
+          "properties": {
+            "x": { "type": "number", "minimum": 0, "maximum": 1 },
+            "y": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
         }
       }
     },

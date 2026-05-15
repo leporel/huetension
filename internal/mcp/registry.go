@@ -20,6 +20,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/leporel/huetension/internal/mcp/tools"
+	"github.com/leporel/huetension/internal/palette/library"
 )
 
 // Descriptor describes a single MCP tool we expose, plus the function that
@@ -111,6 +112,24 @@ var allDescriptors = []Descriptor{
 		DefaultEnabled: true,
 		register:       tools.RegisterImageExtractBatch,
 	},
+	{
+		Name:           "library.categories",
+		Description:    "List the categories in the curated palette catalogue (with palette counts). Slugs are stable URL-safe identifiers usable as the 'category' filter on library.list.",
+		DefaultEnabled: true,
+		register:       tools.RegisterLibraryCategories,
+	},
+	{
+		Name:           "library.list",
+		Description:    "List palettes in the curated catalogue, optionally filtered by category (slug or display name) and/or tag.",
+		DefaultEnabled: true,
+		register:       tools.RegisterLibraryList,
+	},
+	{
+		Name:           "library.get",
+		Description:    "Fetch a single palette from the curated catalogue by id.",
+		DefaultEnabled: true,
+		register:       tools.RegisterLibraryGet,
+	},
 }
 
 // All returns a copy of the catalogue. Useful for `--list-tools` and tests.
@@ -195,6 +214,13 @@ type Config struct {
 	// can pass their own logger to capture or re-route output. Stdio
 	// servers must avoid stdout — JSON-RPC owns it.
 	Logger *slog.Logger
+
+	// Library is the curated palette catalogue served by library.* tools.
+	// nil disables those tools' actual work (they will return an error if
+	// invoked); the tools themselves stay registered so the catalogue
+	// listing reflects the canonical surface. The CLI loads this via
+	// library.Load(externalPath) and threads it in.
+	Library *library.Index
 }
 
 // kind labels a selector entry. Bare names (no prefix) are kindTool for
