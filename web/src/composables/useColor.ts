@@ -4,16 +4,18 @@
  * resolve in < 1 frame — a roundtrip to /api/v1/harmony/* would
  * pegcrushing the wheel UX.
  *
- * Parity contract (S5a): for the fixture base set in
+ * Parity contract: for the fixture base set in
  * `useColor.parity.test.ts`, this module produces byte-identical hex
  * output to what `/api/v1/harmony/{type}/{color}` returns. Any drift
  * fails CI.
  *
- * Wheel convention: HSL-primary. The wheel angle is HSL hue, the
- * radius is HSL saturation, scroll wheel changes HSL lightness.
- * OkLCH is derived for the values panel only — never the gesture
- * input space. This matches `internal/harmony/harmony.go` which
- * rotates in HSL via go-colorful.
+ * Wheel convention: the wheel and per-slot edit intent are HSV (hue /
+ * saturation / value). The wheel's *angle* is the RYB artist-wheel hue
+ * (see `rgbHueToRybHue`); harmony hue-rotation runs on the RYB wheel
+ * via `rotateHueRYB`, mirroring `internal/harmony/harmony.go` — which
+ * still works in HSL internally, so the harmony helpers below keep
+ * using `fromHSL`/`toHSL` for byte parity. OkLCH is derived for the
+ * values panel only — never the gesture input space.
  */
 
 // ---------------------------------------------------------------------------
@@ -201,7 +203,7 @@ export function fromHSL(h: number, s: number, l: number): RGB {
 }
 
 // ---------------------------------------------------------------------------
-// HSV — used by Kuler ring-delta expansion
+// HSV — RGB ↔ HSV conversion
 // ---------------------------------------------------------------------------
 
 export function toHSV(c: RGB): HSV {
@@ -317,13 +319,78 @@ export function fromOkLCH(L: number, C: number, H: number): RGB {
  * WCAG 2.1 relative luminance, 0..1. Verbatim mirror of
  * `internal/color/metrics.go::Luminance` — same linearisation and the
  * same 0.2126 / 0.7152 / 0.0722 channel weights. Used by the contrast
- * composable and by the S7b "extract gradient" extreme-luminance pick.
+ * composable and by the "extract gradient" extreme-luminance pick.
  */
 export function luminance(c: RGB): number {
   const rl = srgbToLinear(c.r / 255);
   const gl = srgbToLinear(c.g / 255);
   const bl = srgbToLinear(c.b / 255);
   return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl;
+}
+
+// ---------------------------------------------------------------------------
+// RYB artist wheel — mirrors internal/color/ryb.go
+// ---------------------------------------------------------------------------
+
+/**
+ * RGB/HSV hue for each evenly-spaced RYB anchor (index i ⇒ RYB hue i·15°).
+ * Verbatim from `internal/color/ryb.go::rybToRGBHue` — the Nodebox / Sighack
+ * RYB hue-correction table. Strictly increasing 0→360, which makes the remap
+ * invertible.
+ */
+const RYB_TO_RGB_HUE: readonly number[] = [
+  // RYB 0°..120°: red → orange → yellow
+  0, 8, 17, 26, 34, 41, 48, 54, 60,
+  // RYB 135°..240°: → green → blue
+  81, 103, 123, 138, 155, 171, 187, 204,
+  // RYB 255°..360°: → violet → red
+  219, 234, 251, 267, 282, 298, 329, 360,
+];
+
+/** Angular gap between adjacent RYB anchors (= 15°). */
+const RYB_ANCHOR_STEP = 360 / (RYB_TO_RGB_HUE.length - 1);
+
+/**
+ * Map a hue on the RYB artist wheel to the equivalent HSV/HSL hue (both in
+ * degrees). Use it to render the color at an RYB-wheel angle. Mirrors
+ * `color.RYBHueToRGBHue`.
+ */
+export function rybHueToRgbHue(rybHue: number): number {
+  rybHue = modAngle(rybHue);
+  const seg = rybHue / RYB_ANCHOR_STEP;
+  const i = Math.floor(seg);
+  const lo = RYB_TO_RGB_HUE[i]!;
+  const hi = RYB_TO_RGB_HUE[i + 1]!;
+  return lo + (hi - lo) * (seg - i);
+}
+
+/**
+ * Inverse of `rybHueToRgbHue` — map an HSV/HSL hue to its position on the RYB
+ * artist wheel. Use it to place a color's handle on the wheel. Mirrors
+ * `color.RGBHueToRYBHue`.
+ */
+export function rgbHueToRybHue(rgbHue: number): number {
+  rgbHue = modAngle(rgbHue);
+  // RYB_TO_RGB_HUE is strictly increasing, so exactly one segment contains
+  // rgbHue. A linear scan over the 24 segments is negligible.
+  for (let i = 0; i < RYB_TO_RGB_HUE.length - 1; i++) {
+    const lo = RYB_TO_RGB_HUE[i]!;
+    const hi = RYB_TO_RGB_HUE[i + 1]!;
+    if (rgbHue < hi) {
+      return (i + (rgbHue - lo) / (hi - lo)) * RYB_ANCHOR_STEP;
+    }
+  }
+  return 360; // unreachable: modAngle keeps rgbHue < 360
+}
+
+/**
+ * Rotate an HSL/HSV hue by `offsetDeg` degrees on the RYB artist wheel: the
+ * hue is mapped to its RYB-wheel position, advanced, then mapped back. This
+ * is what makes "complementary" land on green rather than cyan. Mirrors
+ * `harmony.rotateHueRYB`.
+ */
+function rotateHueRYB(rgbHue: number, offsetDeg: number): number {
+  return rybHueToRgbHue(rgbHueToRybHue(rgbHue) + offsetDeg);
 }
 
 // ---------------------------------------------------------------------------
@@ -338,6 +405,7 @@ export type HarmonyType =
   | 'tetradic'
   | 'square'
   | 'double-complementary'
+  | 'compound'
   | 'monochromatic'
   | 'shades';
 
@@ -350,48 +418,89 @@ interface HarmonyOpts {
 export const HARMONY_ANCHORS: Readonly<Record<string, number[]>> = Object.freeze({
   complementary: [0, 180],
   triadic: [0, 120, 240],
-  'split-complementary': [0, 150, 210],
+  'split-complementary': [0, 199, 161],
   tetradic: [0, 90, 180, 270],
   square: [0, 90, 180, 270],
-  'double-complementary': [0, 60, 180, 240],
+  'double-complementary': [0, 38, 180, 218],
+  compound: [0, -30, -150, 180],
 });
 
 /**
- * Cyclic HSV variation table for slots beyond the natural anchor count.
- * Verbatim from internal/harmony/harmony.go::ringDeltas.
+ * Value floor a ramped slot never drops below — verbatim from
+ * internal/harmony/harmony.go.
  */
-const RING_DELTAS: ReadonlyArray<{ s: number; v: number }> = [
-  { s: 0, v: 0.20 },
-  { s: -0.25, v: 0 },
-  { s: 0, v: -0.20 },
-  { s: -0.25, v: 0.15 },
-  { s: 0.15, v: -0.15 },
-];
+const MONO_MIN_V = 0.2;
+
+/**
+ * HSV saturation/value for Monochromatic ramp position `e` (≥ 1) around a
+ * base HSV, given the per-step fraction `step`. Saturation is a reflecting
+ * triangle wave off the [0,1] gamut edges; value dips one step then ramps
+ * away from base (lighter for a dark base, darker for a bright one). `step`
+ * is 1/count, so a longer palette subdivides the ramp more finely. Mirrors
+ * internal/harmony/harmony.go::monoRamp bit-for-bit.
+ */
+function monoRamp(
+  baseS: number,
+  baseV: number,
+  step: number,
+  e: number,
+): { s: number; v: number } {
+  let s = baseS;
+  let dir = -1;
+  for (let k = 0; k < e; k++) {
+    let next = s + dir * step;
+    if (next < 0 || next > 1) {
+      dir = -dir; // bounce off the gamut edge
+      next = s + dir * step;
+    }
+    s = next;
+  }
+  const vDir = baseV >= 0.5 ? -1 : 1; // bright base ramps darker
+  let v = e === 1 ? baseV - step : baseV + vDir * step * e;
+  if (v < MONO_MIN_V) v = MONO_MIN_V;
+  else if (v > 1) v = 1;
+  return { s, v };
+}
 
 /**
  * rotateHues mirrors the Go function bit-for-bit: offset 0 returns
- * `base` verbatim (no HSL round-trip), every other offset goes
- * through fromHSL(base.h + offset, base.s, base.l). Preserves
- * desaturated bases against drift.
+ * `base` verbatim (no HSL round-trip); every other offset is rotated
+ * on the RYB artist wheel via `rotateHueRYB`. Preserves desaturated
+ * bases against drift.
  */
 function rotateHues(base: RGB, offsets: number[]): RGB[] {
   const hsl = toHSL(base);
-  return offsets.map((o) => (o === 0 ? base : fromHSL(hsl.h + o, hsl.s, hsl.l)));
+  return offsets.map((o) =>
+    o === 0 ? base : fromHSL(rotateHueRYB(hsl.h, o), hsl.s, hsl.l),
+  );
 }
 
+/**
+ * Fill the slots beyond the n natural anchors. Extra slots are grouped
+ * into cycles of n: every slot in a cycle reuses an anchor hue round-robin
+ * and shares one S/V level, the cycles evenly subdividing the base's S/V
+ * down towards zero (1 extra cycle → 50%, 2 → 67%/33%, 3 → 75%/50%/25%).
+ * Value is floored at MONO_MIN_V. Mirrors
+ * internal/harmony/harmony.go::expandIfNeeded.
+ */
 function expandIfNeeded(t: HarmonyType, anchors: RGB[], count: number): RGB[] {
   const n = anchors.length;
   if (count === 0 || count === n) return anchors;
   if (count < n) {
     throw new Error(`harmony: count=${count} too small for ${t} (min ${n})`);
   }
+  // rotateHues varies only hue, so every anchor shares the base's S/V —
+  // anchors[0] (the verbatim base) carries the ramp's reference HSV.
+  const base = toHSV(anchors[0]!);
+  const cycles = Math.floor((count - 1) / n); // ceil((count-n) / n)
   const out = anchors.slice();
   for (let i = n; i < count; i++) {
-    const anchor = anchors[i % n]!;
-    const ring = (Math.floor(i / n) - 1) % RING_DELTAS.length;
-    const d = RING_DELTAS[ring]!;
-    const hsv = toHSV(anchor);
-    out.push(fromHSV(hsv.h, hsv.s + d.s, hsv.v + d.v));
+    const cycle = Math.floor((i - n) / n) + 1;
+    const f = 1 - cycle / (cycles + 1);
+    const h = toHSV(anchors[i % n]!).h;
+    let v = base.v * f;
+    if (v < MONO_MIN_V) v = MONO_MIN_V;
+    out.push(fromHSV(h, base.s * f, v));
   }
   return out;
 }
@@ -402,26 +511,23 @@ function analogous(base: RGB, count: number, step: number): RGB[] {
   const out: RGB[] = [];
   for (let i = 0; i < count; i++) {
     const offset = (i - half) * step;
-    out.push(offset === 0 ? base : fromHSL(hsl.h + offset, hsl.s, hsl.l));
+    out.push(
+      offset === 0 ? base : fromHSL(rotateHueRYB(hsl.h, offset), hsl.s, hsl.l),
+    );
   }
   return out;
 }
 
 function monochromatic(base: RGB, count: number): RGB[] {
   if (count === 1) return [base];
-  const hsl = toHSL(base);
-  const span = 60.0;
-  const out: RGB[] = [];
-  for (let i = 0; i < count; i++) {
-    let lp = hsl.l * 100 - 30 + (span / (count - 1)) * i;
-    if (lp < 10) lp = 10;
-    if (lp > 90) lp = 90;
-    out.push(fromHSL(hsl.h, hsl.s, lp / 100));
-  }
-  // Odd count: middle slot is base lightness — substitute base
-  // verbatim to avoid HSL round-trip drift on desaturated bases.
-  if (count % 2 === 1) {
-    out[Math.floor(count / 2)] = base;
+  const hsv = toHSV(base);
+  const step = 1 / count;
+  // Slot 0 is base verbatim — no HSV round-trip drift on desaturated
+  // bases; every later slot applies the monoRamp tint/shade ramp.
+  const out: RGB[] = [base];
+  for (let i = 1; i < count; i++) {
+    const { s, v } = monoRamp(hsv.s, hsv.v, step, i);
+    out.push(fromHSV(hsv.h, s, v));
   }
   return out;
 }
@@ -439,8 +545,10 @@ function shades(base: RGB, count: number): RGB[] {
 }
 
 /**
- * Generate a harmony around `base`. Element 0 is always `base`
- * unchanged (bit-exact preservation matches Go).
+ * Generate a harmony around `base`. The base sits at element 0 for the
+ * hue-rotation harmonies, Shades, and Monochromatic, and at the centre
+ * for Analogous (see `harmonyBaseIndex`) — an even-count Analogous
+ * spreads the base between slots. Mirrors internal/harmony/harmony.go.
  */
 export function generateHarmony(
   t: HarmonyType,
@@ -454,12 +562,14 @@ export function generateHarmony(
     case 'triadic':
       return expandIfNeeded(t, rotateHues(base, [0, 120, 240]), count);
     case 'split-complementary':
-      return expandIfNeeded(t, rotateHues(base, [0, 150, 210]), count);
+      return expandIfNeeded(t, rotateHues(base, [0, 199, 161]), count);
     case 'tetradic':
     case 'square':
       return expandIfNeeded(t, rotateHues(base, [0, 90, 180, 270]), count);
     case 'double-complementary':
-      return expandIfNeeded(t, rotateHues(base, [0, 60, 180, 240]), count);
+      return expandIfNeeded(t, rotateHues(base, [0, 38, 180, 218]), count);
+    case 'compound':
+      return expandIfNeeded(t, rotateHues(base, [0, -30, -150, 180]), count);
     case 'analogous':
       return analogous(base, count || 3, opts.step ?? 30);
     case 'monochromatic':
@@ -484,6 +594,23 @@ export function naturalAnchorCount(t: HarmonyType): number {
     case 'square':
       return 4;
     case 'double-complementary': return 4;
+    case 'compound': return 4;
     default: return 0;
   }
+}
+
+/**
+ * Slot index where `generateHarmony` places the base color. Hue-rotation
+ * harmonies, Shades, and Monochromatic keep it at 0; only Analogous
+ * centres it. For an even-count Analogous the base falls *between* slots
+ * — the centre index is returned as the nearest approximation, used only
+ * for the wheel's base marker and which-handle-propagates. The
+ * authoritative base colour is tracked separately (harmony store), so
+ * this never affects regeneration correctness.
+ */
+export function harmonyBaseIndex(t: HarmonyType, count: number): number {
+  if (t === 'analogous') {
+    return Math.floor(Math.max(1, count) / 2);
+  }
+  return 0;
 }

@@ -214,9 +214,9 @@ func (c Color) RGB() string {
 func (c Color) HSL() string {
 	h, s, l := c.toColorful().Hsl()
 	if c.A == 255 {
-		return fmt.Sprintf("hsl(%s %s%% %s%%)", formatFloat(h, 1), formatFloat(s*100, 1), formatFloat(l*100, 1))
+		return fmt.Sprintf("hsl(%d %d%% %d%%)", roundInt(h), roundInt(s*100), roundInt(l*100))
 	}
-	return fmt.Sprintf("hsla(%s %s%% %s%% / %s)", formatFloat(h, 1), formatFloat(s*100, 1), formatFloat(l*100, 1), formatAlpha(c.A))
+	return fmt.Sprintf("hsla(%d %d%% %d%% / %s)", roundInt(h), roundInt(s*100), roundInt(l*100), formatAlpha(c.A))
 }
 
 // HSV returns hsv() notation. Not part of the CSS Color spec but widely used
@@ -224,9 +224,9 @@ func (c Color) HSL() string {
 func (c Color) HSV() string {
 	h, s, v := c.toColorful().Hsv()
 	if c.A == 255 {
-		return fmt.Sprintf("hsv(%s %s%% %s%%)", formatFloat(h, 1), formatFloat(s*100, 1), formatFloat(v*100, 1))
+		return fmt.Sprintf("hsv(%d %d%% %d%%)", roundInt(h), roundInt(s*100), roundInt(v*100))
 	}
-	return fmt.Sprintf("hsva(%s %s%% %s%% / %s)", formatFloat(h, 1), formatFloat(s*100, 1), formatFloat(v*100, 1), formatAlpha(c.A))
+	return fmt.Sprintf("hsva(%d %d%% %d%% / %s)", roundInt(h), roundInt(s*100), roundInt(v*100), formatAlpha(c.A))
 }
 
 // HLS returns Python colorsys-compatible notation: hls(h, l, s) with all

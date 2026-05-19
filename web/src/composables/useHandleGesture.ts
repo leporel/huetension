@@ -3,11 +3,10 @@
  * WheelEvent into a small set of domain callbacks so the ColorWheel
  * component owns no DOM glue.
  *
- * Contract (S5a):
+ * Contract:
  *   - One undoable snapshot per gesture. `history.pause()` on
  *     pointerdown, `history.resume(true)` on pointerup. Wheel-scroll
- *     ticks are individual snapshots (each wheel notch = one undo
- *     step) — per slice plan §5.
+ *     ticks are individual snapshots (each wheel notch = one undo step).
  *   - Modifier keys are *live reads* off the current event, never
  *     state-machine states. Shift = hue-only, Alt = sat-only,
  *     Ctrl/Cmd = "unlock from harmony angle" (the consumer chooses
@@ -17,16 +16,19 @@
  */
 
 import { ref, type Ref } from 'vue';
-import { modAngle } from './useColor';
+import { modAngle, rgbHueToRybHue } from './useColor';
+
+// A pointerdown closer to the centre than this fraction of the disc
+// radius has an ill-defined angle — drive hue from the absolute pointer
+// angle for that gesture instead of a (meaningless) relative delta.
+const CENTER_ABSOLUTE_FRAC = 0.15;
 
 export interface WheelGeometry {
   /** Center in component-local CSS pixels. */
   cx: number;
   cy: number;
-  /** Outer ring radius (handles ride here at sat=1). */
+  /** Disc radius. Saturation maps linearly 0 (centre) → 1 (rim). */
   rOuter: number;
-  /** Inner ring radius (handles ride here at sat=0). */
-  rInner: number;
 }
 
 export interface GestureModifiers {
@@ -40,11 +42,12 @@ export interface GestureModifiers {
 }
 
 export interface DragDelta {
-  /** New HSL hue in degrees [0, 360). */
+  /** New hue on the RYB artist wheel, degrees [0, 360). The consumer
+   *  maps it back to an HSV hue. */
   hue: number;
-  /** Hue offset from gesture start, in degrees signed [-360, 360]. */
+  /** Hue offset from gesture start, in RYB-wheel degrees, signed. */
   hueDelta: number;
-  /** New HSL saturation [0, 1]. */
+  /** New HSV saturation [0, 1]. */
   saturation: number;
   /** True if Shift was active for the *whole* gesture path so far —
    *  if the user picked up Shift mid-drag we don't retro-apply it. */
@@ -57,12 +60,12 @@ export interface UseHandleGestureCallbacks {
   /** Locked slots short-circuit: pointerdown is ignored, no
    *  pause/resume on history. */
   isLocked: (slot: number) => boolean;
-  /** The slot's HSL at the moment of pointerdown. */
-  getStartHSL: (slot: number) => { h: number; s: number; l: number };
+  /** The slot's HSV at the moment of pointerdown. */
+  getStartHSV: (slot: number) => { h: number; s: number; v: number };
   /** Called per pointermove with the resolved drag delta. */
   onDrag: (slot: number, delta: DragDelta) => void;
-  /** Called per wheel notch (positive = up = lighter). */
-  onLightnessStep: (slot: number, steps: number, mods: GestureModifiers) => void;
+  /** Called per wheel notch (positive = up = brighter). */
+  onValueStep: (slot: number, steps: number, mods: GestureModifiers) => void;
   /** History pause/resume adapter from `useWorkspaceStore`. */
   history: {
     pause: () => void;
@@ -75,6 +78,10 @@ interface DragState {
   startHue: number;
   startSat: number;
   startAngle: number; // angle from center to pointerdown position
+  // True when the pointerdown landed near the centre: hue then follows
+  // the absolute pointer angle, since a relative delta from an
+  // ill-defined start angle would steer the handle the wrong way.
+  absolute: boolean;
   geometry: WheelGeometry;
 }
 
@@ -84,7 +91,7 @@ export interface UseHandleGestureBindings {
   /** Bound at the wheel root — receives events post-capture. */
   onPointerMove: (e: PointerEvent) => void;
   onPointerUp: (e: PointerEvent) => void;
-  /** Wheel scroll for lightness step. Bind on each handle. */
+  /** Wheel scroll for value step. Bind on each handle. */
   onWheel: (e: WheelEvent, slot: number) => void;
   /** Public for the ColorWheel cursor styling. */
   isDragging: Ref<boolean>;
@@ -92,10 +99,11 @@ export interface UseHandleGestureBindings {
 
 /**
  * pointerAngle returns the angle in degrees from (cx, cy) to (px, py),
- * with 0° at the 3 o'clock position and growing clockwise — matching
- * the HSL hue convention used by the rest of huetension (red at 0°,
- * cyan at 180°). Reads off the SVG's screen coordinates so Y points
- * down; the negate-Y trick keeps HSL hue going clockwise.
+ * with 0° at the 3 o'clock position. This is the RYB artist-wheel
+ * angle the disc is painted in — the consumer (ColorWheel) maps it
+ * back to an HSV hue via `rybHueToRgbHue`. Reads off screen
+ * coordinates so Y points down; negating dy matches handlePosition's
+ * angle direction.
  */
 function pointerAngle(px: number, py: number, cx: number, cy: number): number {
   const dx = px - cx;
@@ -131,12 +139,16 @@ export function useHandleGesture(
     if (cb.isLocked(slot)) return;
     if (state) return; // ignore multi-touch second finger for now
     const geometry = cb.getGeometry();
-    const start = cb.getStartHSL(slot);
+    const start = cb.getStartHSV(slot);
+    const startRadius = pointerRadius(e.clientX, e.clientY, geometry.cx, geometry.cy);
     state = {
       slot,
-      startHue: start.h,
+      // The gesture runs in RYB artist-wheel space (screen angle =
+      // artist hue), so store the slot's hue as its artist angle.
+      startHue: rgbHueToRybHue(start.h),
       startSat: start.s,
       startAngle: pointerAngle(e.clientX, e.clientY, geometry.cx, geometry.cy),
+      absolute: startRadius < geometry.rOuter * CENTER_ABSOLUTE_FRAC,
       geometry,
     };
     isDragging.value = true;
@@ -158,7 +170,7 @@ export function useHandleGesture(
   function onPointerMove(e: PointerEvent): void {
     if (!state) return;
     const mods = readModifiers(e);
-    const { cx, cy, rOuter, rInner } = state.geometry;
+    const { cx, cy, rOuter } = state.geometry;
     const ang = pointerAngle(e.clientX, e.clientY, cx, cy);
     const rad = pointerRadius(e.clientX, e.clientY, cx, cy);
 
@@ -168,17 +180,24 @@ export function useHandleGesture(
     if (hueDelta > 180) hueDelta -= 360;
     if (hueDelta < -180) hueDelta += 360;
 
-    // Map radius into [0, 1] saturation. The visible ring sits between
-    // rInner and rOuter; saturation 1 at rOuter, 0 at rInner. Outside
-    // the ring is clamped so the handle doesn't "fall off".
-    const span = Math.max(1e-6, rOuter - rInner);
-    let sat = (rad - rInner) / span;
-    if (sat < 0) sat = 0;
-    else if (sat > 1) sat = 1;
+    // Map radius into [0, 1] saturation: 0 at the disc centre, 1 at the
+    // rim. A pointer dragged past the rim clamps so the handle doesn't
+    // "fall off".
+    let sat = rad / Math.max(1e-6, rOuter);
+    if (sat > 1) sat = 1;
 
     // Modifier locks: Alt → hue-locked (only sat moves), Shift →
     // sat-locked (only hue moves). Both can co-exist (no-op).
-    const newHue = mods.alt ? state.startHue : modAngle(state.startHue + hueDelta);
+    // `absolute` gestures (started near the centre) take the raw pointer
+    // angle; otherwise hue advances by the relative drag delta.
+    let newHue: number;
+    if (mods.alt) {
+      newHue = state.startHue;
+    } else if (state.absolute) {
+      newHue = ang;
+    } else {
+      newHue = modAngle(state.startHue + hueDelta);
+    }
     const newSat = mods.shift ? state.startSat : sat;
 
     cb.onDrag(state.slot, {
@@ -216,7 +235,7 @@ export function useHandleGesture(
     const mods = readModifiers(e);
     // Each notch is its own history entry — no pause/resume needed,
     // the workspace setter creates one snapshot per call.
-    cb.onLightnessStep(slot, steps, mods);
+    cb.onValueStep(slot, steps, mods);
     e.preventDefault();
   }
 

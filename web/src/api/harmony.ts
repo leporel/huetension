@@ -9,6 +9,7 @@ export type HarmonyType =
   | 'tetradic'
   | 'square'
   | 'double'
+  | 'compound'
   | 'monochromatic'
   | 'shades';
 

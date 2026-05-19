@@ -9,6 +9,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/leporel/huetension/internal/mcp/tools"
+	"github.com/leporel/huetension/internal/palette/library"
 )
 
 // implementationName is the MCP `serverInfo.name` reported to clients. Kept
@@ -26,7 +27,7 @@ func depsFromConfig(cfg Config, logger *slog.Logger) tools.Deps {
 			MaxImageBytes:        cfg.MaxImageBytes,
 			BlockPrivateNetworks: cfg.BlockPrivateNetworks,
 		},
-		Library: cfg.Library,
+		Library: library.NewStore(cfg.Library, cfg.LibraryPath),
 		Logger:  logger,
 	}
 }
@@ -91,21 +92,20 @@ func RunStdio(ctx context.Context, cfg Config) error {
 // listed they run concurrently; the first failure cancels the rest.
 //
 // Empty Transports defaults to ["stdio"] for backwards compatibility with
-// slice A–D callers.
 func Run(ctx context.Context, cfg Config) error {
 	tlist := normaliseTransports(cfg.Transports)
 	if len(tlist) == 0 {
 		tlist = []string{"stdio"}
 	}
 
-	srv, logger, _, err := buildWithLogger(cfg)
+	srv, logger, enabled, err := buildWithLogger(cfg)
 	if err != nil {
 		return err
 	}
 
 	// Single transport — call directly, no goroutines / channel plumbing.
 	if len(tlist) == 1 {
-		return runTransport(ctx, srv, logger, cfg, tlist[0])
+		return runTransport(ctx, srv, logger, cfg, enabled, tlist[0])
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -114,7 +114,7 @@ func Run(ctx context.Context, cfg Config) error {
 	errCh := make(chan error, len(tlist))
 	for _, t := range tlist {
 		go func() {
-			errCh <- runTransport(ctx, srv, logger, cfg, t)
+			errCh <- runTransport(ctx, srv, logger, cfg, enabled, t)
 		}()
 	}
 
@@ -131,7 +131,7 @@ func Run(ctx context.Context, cfg Config) error {
 	return firstErr
 }
 
-func runTransport(ctx context.Context, srv *sdk.Server, logger *slog.Logger, cfg Config, transport string) error {
+func runTransport(ctx context.Context, srv *sdk.Server, logger *slog.Logger, cfg Config, enabled []Descriptor, transport string) error {
 	switch transport {
 	case "stdio":
 		if err := srv.Run(ctx, &sdk.StdioTransport{}); err != nil {
@@ -139,9 +139,9 @@ func runTransport(ctx context.Context, srv *sdk.Server, logger *slog.Logger, cfg
 		}
 		return nil
 	case "http":
-		return runHTTP(ctx, srv, logger, cfg, false)
+		return runHTTP(ctx, srv, logger, cfg, enabled, false)
 	case "sse":
-		return runHTTP(ctx, srv, logger, cfg, true)
+		return runHTTP(ctx, srv, logger, cfg, enabled, true)
 	}
 	return fmt.Errorf("mcp: unknown transport %q", transport)
 }

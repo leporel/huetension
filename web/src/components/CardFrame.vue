@@ -1,8 +1,6 @@
 <script setup lang="ts">
-// Empty card frame used as a placeholder until each feature card is
-// implemented in later slices (S5 onward). Provides the visual chrome
-// (border, padding, header, optional subtitle) so views can already
-// communicate the final layout.
+// Card frame providing the visual chrome (border, padding, header,
+// optional subtitle) shared by every feature card.
 
 interface Props {
   title: string;
@@ -39,6 +37,9 @@ defineProps<Props>();
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* Clears the 52px sticky topbar when a sidebar anchor scrolls a card
+     to the top of the viewport. */
+  scroll-margin-top: 64px;
 }
 
 .card-h {

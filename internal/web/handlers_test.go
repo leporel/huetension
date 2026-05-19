@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -276,6 +277,35 @@ func TestGradientStops(t *testing.T) {
 	}
 }
 
+// TestGradientPositions covers the optional positions= param: a valid
+// positioned request succeeds, a count mismatch is a 400.
+func TestGradientPositions(t *testing.T) {
+	base, teardown := newTestServer(t)
+	defer teardown()
+	var env struct {
+		Result struct {
+			Palette struct {
+				Size int `json:"size"`
+			} `json:"palette"`
+		} `json:"result"`
+	}
+	resp := doGET(t, base,
+		"/api/v1/gradient?stops=%23000000,%23ff0000,%23ffffff&positions=0,0.2,1&steps=7", &env)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: %d", resp.StatusCode)
+	}
+	if env.Result.Palette.Size != 7 {
+		t.Errorf("size = %d, want 7", env.Result.Palette.Size)
+	}
+
+	// positions count must match stops count → 400, not 500.
+	bad := doGET(t, base,
+		"/api/v1/gradient?stops=%23000000,%23ffffff&positions=0,0.5,1&steps=5", nil)
+	if bad.StatusCode != http.StatusBadRequest {
+		t.Errorf("mismatched positions: status = %d, want 400", bad.StatusCode)
+	}
+}
+
 // TestContrastEndpoint exercises wcag21 (default), apca, and both modes.
 func TestContrastEndpoint(t *testing.T) {
 	base, teardown := newTestServer(t)
@@ -349,60 +379,124 @@ func TestPaletteRandomDeterminism(t *testing.T) {
 	}
 }
 
-func TestExportCSSEndpoint(t *testing.T) {
+// exportEnvelope decodes the /export response — Encoding is set only for
+// binary formats.
+type exportEnvelope struct {
+	Tool   string `json:"tool"`
+	Result struct {
+		Format   string `json:"format"`
+		Kind     string `json:"kind"`
+		Content  string `json:"content"`
+		Encoding string `json:"encoding"`
+		Filename string `json:"filename"`
+	} `json:"result"`
+}
+
+// TestExportEndpointText exercises the general /export route for a text
+// format, including the CSS `kind` dialect refinement.
+func TestExportEndpointText(t *testing.T) {
 	base, teardown := newTestServer(t)
 	defer teardown()
-	var env struct {
-		Tool   string `json:"tool"`
-		Result struct {
-			Format   string `json:"format"`
-			Kind     string `json:"kind"`
-			Content  string `json:"content"`
-			Filename string `json:"filename"`
-		} `json:"result"`
-	}
-	resp := doPOST(t, base, "/api/v1/export/css", map[string]any{
+	var env exportEnvelope
+	resp := doPOST(t, base, "/api/v1/export", map[string]any{
+		"format": "css",
 		"colors": []string{"#ff0000", "#00ff00"},
 		"name":   "brand",
-		"kind":   "vars",
+		"kind":   "scss",
 	}, &env)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status: %d", resp.StatusCode)
 	}
-	if env.Tool != "export.css" {
+	if env.Tool != "export" {
 		t.Errorf("tool = %q", env.Tool)
 	}
-	if !strings.Contains(env.Result.Content, "--brand-1") {
-		t.Errorf("content missing --brand-1: %s", env.Result.Content)
+	// `kind: scss` refines `format: css` → the SCSS renderer.
+	if env.Result.Format != "scss" || env.Result.Kind != "scss" {
+		t.Errorf("format/kind = %q/%q, want scss/scss", env.Result.Format, env.Result.Kind)
 	}
-	if env.Result.Filename != "brand.css" {
+	if env.Result.Encoding != "" {
+		t.Errorf("text format should not carry an encoding, got %q", env.Result.Encoding)
+	}
+	if !strings.Contains(env.Result.Content, "$brand-1") {
+		t.Errorf("content missing $brand-1: %s", env.Result.Content)
+	}
+	if env.Result.Filename != "brand.scss" {
 		t.Errorf("filename = %q", env.Result.Filename)
 	}
 }
 
-func TestExportTailwindEndpoint(t *testing.T) {
+// TestExportEndpointBinary checks that PNG output is base64-encoded and
+// round-trips back to a valid PNG.
+func TestExportEndpointBinary(t *testing.T) {
 	base, teardown := newTestServer(t)
 	defer teardown()
-	var env struct {
-		Tool   string `json:"tool"`
-		Result struct {
-			Format   string `json:"format"`
-			Content  string `json:"content"`
-			Filename string `json:"filename"`
-		} `json:"result"`
-	}
-	resp := doPOST(t, base, "/api/v1/export/tailwind", map[string]any{
-		"colors": []string{"#ff0000", "#00ff00"},
-		"name":   "brand",
+	var env exportEnvelope
+	resp := doPOST(t, base, "/api/v1/export", map[string]any{
+		"format": "png",
+		"colors": []string{"#ff0000", "#00ff00", "#0000ff"},
+		"name":   "swatch",
 	}, &env)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status: %d", resp.StatusCode)
 	}
-	if env.Tool != "export.tailwind" {
-		t.Errorf("tool = %q", env.Tool)
+	if env.Result.Encoding != "base64" {
+		t.Fatalf("encoding = %q, want base64", env.Result.Encoding)
 	}
-	if env.Result.Content == "" {
-		t.Errorf("expected non-empty content")
+	raw, err := base64.StdEncoding.DecodeString(env.Result.Content)
+	if err != nil {
+		t.Fatalf("content is not valid base64: %v", err)
+	}
+	if !bytes.HasPrefix(raw, []byte("\x89PNG\r\n\x1a\n")) {
+		t.Errorf("decoded content is not a PNG (magic = % x)", raw[:min(8, len(raw))])
+	}
+	if env.Result.Filename != "swatch.png" {
+		t.Errorf("filename = %q", env.Result.Filename)
+	}
+}
+
+// TestExportEndpointTailwindShades confirms the shades control reaches the
+// tailwind renderer.
+func TestExportEndpointTailwindShades(t *testing.T) {
+	base, teardown := newTestServer(t)
+	defer teardown()
+	var env exportEnvelope
+	resp := doPOST(t, base, "/api/v1/export", map[string]any{
+		"format": "tailwind",
+		"colors": []string{"#ff0000"},
+		"name":   "brand",
+		"shades": 5,
+	}, &env)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: %d", resp.StatusCode)
+	}
+	// A 5-shade scale expands one input into 100/300/500/700/900.
+	if !strings.Contains(env.Result.Content, "500") {
+		t.Errorf("expected a shade-scale key, got: %s", env.Result.Content)
+	}
+}
+
+// TestExportEndpointErrors covers the request-validation 400s.
+func TestExportEndpointErrors(t *testing.T) {
+	base, teardown := newTestServer(t)
+	defer teardown()
+	cases := []struct {
+		name    string
+		payload map[string]any
+	}{
+		{"no colors", map[string]any{"format": "css", "colors": []string{}}},
+		{"missing format", map[string]any{"colors": []string{"#ff0000"}}},
+		{"unknown format", map[string]any{"format": "xml", "colors": []string{"#ff0000"}}},
+		{"bad color", map[string]any{"format": "css", "colors": []string{"not-a-color"}}},
+		{"negative shades", map[string]any{"format": "tailwind", "colors": []string{"#ff0000"}, "shades": -1}},
+		{"kind on non-css", map[string]any{"format": "png", "colors": []string{"#ff0000"}, "kind": "scss"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := doPOST(t, base, "/api/v1/export", tc.payload, nil)
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400", resp.StatusCode)
+			}
+		})
 	}
 }
 

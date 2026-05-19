@@ -14,9 +14,9 @@ import (
 
 // HarmonyGenerateParams is the typed input for harmony.generate.
 type HarmonyGenerateParams struct {
-	Type  string  `json:"type" jsonschema:"harmony type: complementary|analogous|triadic|split-complementary|tetradic|square|double-complementary|monochromatic|shades"`
+	Type  string  `json:"type" jsonschema:"harmony type: complementary|analogous|triadic|split-complementary|tetradic|square|double-complementary|compound|monochromatic|shades"`
 	Base  string  `json:"base" jsonschema:"base color (hex, CSS named, rgb()/hsl()/oklch())"`
-	Count int     `json:"count,omitempty" jsonschema:"palette size; for hue harmonies the extras cycle anchors with HSV variations (Adobe Kuler style)"`
+	Count int     `json:"count,omitempty" jsonschema:"palette size; for hue harmonies the extras cycle anchors with HSV tint/shade variations"`
 	Step  float64 `json:"step,omitempty" jsonschema:"analogous-only: angular step between neighbours in degrees (default 30)"`
 }
 
@@ -84,6 +84,7 @@ func resolveHarmonyType(raw string) (harmony.Type, error) {
 		harmony.Tetradic,
 		harmony.Square,
 		harmony.DoubleComplementary,
+		harmony.Compound,
 		harmony.Monochromatic,
 		harmony.Shades,
 	}
@@ -103,6 +104,6 @@ func resolveHarmonyType(raw string) (harmony.Type, error) {
 func RegisterHarmonyGenerate(srv *sdk.Server) {
 	sdk.AddTool(srv, &sdk.Tool{
 		Name:        "harmony.generate",
-		Description: "Generate a color harmony (complementary, analogous, triadic, split, tetradic/square, double-complementary, monochromatic, shades) around a base color.",
+		Description: "Generate a color harmony (complementary, analogous, triadic, split, tetradic/square, double-complementary, compound, monochromatic, shades) around a base color.",
 	}, handleHarmonyGenerate)
 }

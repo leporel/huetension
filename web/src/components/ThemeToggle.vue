@@ -21,27 +21,43 @@ function onClick() {
 </script>
 
 <template>
-  <button
-    type="button"
-    class="theme-toggle"
-    :title="currentLabel"
-    :aria-label="currentLabel"
-    @click="onClick"
-  >
-    <component :is="currentIcon" :size="14" />
-  </button>
-  <span class="sr-only" aria-live="polite">{{ currentLabel }}</span>
-  <span class="mono mode-pill" aria-hidden="true">
-    {{ theme.mode }}<span v-if="theme.mode === 'system'" class="mode-pill-suffix">
-      · {{ theme.resolved }}
+  <div class="theme-toggle-wrap">
+    <button
+      type="button"
+      class="theme-toggle"
+      :title="currentLabel"
+      :aria-label="currentLabel"
+      @click="onClick"
+    >
+      <component :is="currentIcon" :size="14" />
+    </button>
+    <span class="sr-only" aria-live="polite">{{ currentLabel }}</span>
+    <!-- Decorative caption under the button. Absolutely positioned so its
+         varying length ("dark" vs "system · dark") never shifts the
+         button left or right. -->
+    <span class="mono mode-caption" aria-hidden="true">
+      {{ theme.mode }}<span v-if="theme.mode === 'system'" class="mode-caption-suffix">
+        · {{ theme.resolved }}
+      </span>
     </span>
-  </span>
+  </div>
 </template>
 
 <style scoped>
+.theme-toggle-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  /* 32px button + 2px gap + caption — fixed so the topbar centres the
+     whole control (caption included) instead of clipping it. */
+  height: 44px;
+}
+
 .theme-toggle {
   width: 32px;
   height: 32px;
+  flex: 0 0 auto;
   border-radius: 8px;
   border: 1px solid var(--line-soft);
   background: var(--bg-1);
@@ -56,16 +72,19 @@ function onClick() {
   border-color: var(--line);
 }
 
-.mode-pill {
+.mode-caption {
+  position: absolute;
+  top: 34px; /* 32px button + 2px gap */
+  right: 0; /* right-anchored: the caption grows leftward, never past the topbar edge */
+  font-size: 9.5px;
+  line-height: 1;
+  letter-spacing: 0.02em;
   color: var(--fg-3);
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--line-soft);
-  background: var(--bg-1);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
-.mode-pill-suffix {
-  margin-left: 4px;
+.mode-caption-suffix {
   color: var(--fg-2);
 }
 

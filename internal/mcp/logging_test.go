@@ -126,41 +126,6 @@ func TestLoggingMiddlewareLogsUnknownToolError(t *testing.T) {
 	}
 }
 
-// TestParseLogLevel pins the level-string parser. Empty defaults to info
-// (most callers omit --log-level entirely). Unknown values are rejected
-// loudly.
-func TestParseLogLevel(t *testing.T) {
-	cases := map[string]struct {
-		want    slog.Level
-		wantErr bool
-	}{
-		"":        {want: slog.LevelInfo},
-		"info":    {want: slog.LevelInfo},
-		"INFO":    {want: slog.LevelInfo},
-		"debug":   {want: slog.LevelDebug},
-		"warn":    {want: slog.LevelWarn},
-		"warning": {want: slog.LevelWarn},
-		"error":   {want: slog.LevelError},
-		"trace":   {wantErr: true},
-	}
-	for in, want := range cases {
-		got, err := parseLogLevel(in)
-		if want.wantErr {
-			if err == nil {
-				t.Errorf("parseLogLevel(%q) = nil err, want error", in)
-			}
-			continue
-		}
-		if err != nil {
-			t.Errorf("parseLogLevel(%q): %v", in, err)
-			continue
-		}
-		if got != want.want {
-			t.Errorf("parseLogLevel(%q) = %v, want %v", in, got, want.want)
-		}
-	}
-}
-
 // TestWithAccessLog drives a tiny HTTP handler through withAccessLog and
 // verifies the captured log line carries method/path/status/duration.
 // We do not bring up a real listener — httptest.NewRecorder is enough to

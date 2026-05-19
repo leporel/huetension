@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useWorkspaceStore } from '../stores/workspace';
+import { useReviewStore } from '../stores/review';
 import { fromHex, toHex, type RGB } from '../composables/useColor';
 import {
   BLINDNESS_KINDS,
@@ -9,13 +9,14 @@ import {
 } from '../composables/useBlindness';
 
 /**
- * Color-blindness simulation strips of the active palette: Normal plus
- * the four Brettel–Viénot variants. Recomputes off `workspace.colors`
- * on every change — the matrix multiply is cheap enough to skip the
- * /api/v1/blindness/simulate roundtrip (see useBlindness).
+ * Color-blindness simulation strips: Normal plus the four Brettel–Viénot
+ * variants. Reads the shared *review palette* (`useReviewStore`) so a
+ * Contrast-checker lightness tweak or applied fix shows here too — the
+ * matrix multiply is cheap enough to skip the /api/v1/blindness/simulate
+ * roundtrip (see useBlindness).
  */
 
-const workspace = useWorkspaceStore();
+const review = useReviewStore();
 
 function safeParse(hex: string): RGB {
   try {
@@ -25,7 +26,7 @@ function safeParse(hex: string): RGB {
   }
 }
 
-const base = computed(() => workspace.colors.map((s) => safeParse(s.hex)));
+const base = computed(() => review.colors.map((hex) => safeParse(hex)));
 
 interface Strip {
   key: string;

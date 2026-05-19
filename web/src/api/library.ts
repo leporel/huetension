@@ -33,3 +33,25 @@ export function get(
     opts,
   );
 }
+
+/** Body of POST /api/v1/library/palette. The server owns the id and
+ *  always files the palette under the "Saved" category. */
+export interface LibrarySaveRequest {
+  name: string;
+  colors: string[];
+  categories?: string[];
+  tags?: string[];
+  description?: string;
+}
+
+/** POST /api/v1/library/palette — save a user palette to the catalogue. */
+export function save(
+  req: LibrarySaveRequest,
+  opts?: RequestOptions,
+): Promise<LibraryPaletteEnvelope['result']> {
+  return api.postJSON<LibraryPaletteEnvelope['result']>(
+    '/library/palette',
+    req,
+    opts,
+  );
+}

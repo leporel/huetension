@@ -7,11 +7,11 @@ interface TabDef {
   label: string;
 }
 
+// Two tabs only. The Tools page (`/`) holds every generator / tool /
+// checker card; Library stays separate.
 const tabs: TabDef[] = [
-  { to: '/', label: 'Generate' },
+  { to: '/', label: 'Tools' },
   { to: '/library', label: 'Library' },
-  { to: '/tools', label: 'Tools' },
-  { to: '/contrast', label: 'Contrast' },
 ];
 </script>
 
@@ -29,8 +29,8 @@ const tabs: TabDef[] = [
         :key="t.to"
         :to="t.to"
         class="nav-link"
-        active-class="active"
-        :exact-active-class="t.to === '/' ? 'active' : ''"
+        :active-class="t.to === '/' ? '' : 'active'"
+        exact-active-class="active"
       >
         <span class="dot" aria-hidden="true" />
         {{ t.label }}

@@ -38,7 +38,7 @@ func newRandomCmd() *cobra.Command {
 	addOutputFlags(cmd, &of, "text")
 	cmd.Flags().IntVarP(&rf.count, "count", "n", 5, "number of colors in the palette")
 	cmd.Flags().Uint64Var(&rf.seed, "seed", 0, "PRNG seed for deterministic output (0 = random)")
-	cmd.Flags().StringVar(&rf.harmony, "harmony", "none", "harmony around a random base (none|complementary|analogous|triadic|split-complementary|tetradic|square|double-complementary|monochromatic|shades)")
+	cmd.Flags().StringVar(&rf.harmony, "harmony", "none", "harmony around a random base (none|complementary|analogous|triadic|split-complementary|tetradic|square|double-complementary|compound|monochromatic|shades)")
 	cmd.Flags().StringVar(&rf.sortBy, "sort", "", "sort palette by (luminance|lightness|okl|hue|saturation|frequency)")
 	cmd.Flags().BoolVar(&rf.reverse, "reverse", false, "reverse the sort order")
 

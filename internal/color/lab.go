@@ -88,16 +88,16 @@ func parseLabL(s string) (float64, error) {
 func (c Color) Lab() string {
 	l, a, b := c.toColorful().Lab()
 	if c.A == 255 {
-		return fmt.Sprintf("lab(%s %s %s)", formatFloat(l*labScale, 2), formatFloat(a*labScale, 2), formatFloat(b*labScale, 2))
+		return fmt.Sprintf("lab(%d %d %d)", roundInt(l*labScale), roundInt(a*labScale), roundInt(b*labScale))
 	}
-	return fmt.Sprintf("lab(%s %s %s / %s)", formatFloat(l*labScale, 2), formatFloat(a*labScale, 2), formatFloat(b*labScale, 2), formatAlpha(c.A))
+	return fmt.Sprintf("lab(%d %d %d / %s)", roundInt(l*labScale), roundInt(a*labScale), roundInt(b*labScale), formatAlpha(c.A))
 }
 
 // LCH returns CSS lch() notation.
 func (c Color) LCH() string {
 	h, c2, l := c.toColorful().Hcl()
 	if c.A == 255 {
-		return fmt.Sprintf("lch(%s %s %s)", formatFloat(l*labScale, 2), formatFloat(c2*labScale, 2), formatFloat(h, 1))
+		return fmt.Sprintf("lch(%d %d %d)", roundInt(l*labScale), roundInt(c2*labScale), roundInt(h))
 	}
-	return fmt.Sprintf("lch(%s %s %s / %s)", formatFloat(l*labScale, 2), formatFloat(c2*labScale, 2), formatFloat(h, 1), formatAlpha(c.A))
+	return fmt.Sprintf("lch(%d %d %d / %s)", roundInt(l*labScale), roundInt(c2*labScale), roundInt(h), formatAlpha(c.A))
 }

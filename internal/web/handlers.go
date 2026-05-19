@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,7 +15,6 @@ import (
 	"github.com/leporel/huetension/internal/gradient"
 	"github.com/leporel/huetension/internal/harmony"
 	"github.com/leporel/huetension/internal/palette"
-	"github.com/leporel/huetension/internal/palette/library"
 	"github.com/leporel/huetension/internal/sandbox"
 )
 
@@ -24,7 +24,7 @@ import (
 // /library* serves the curated catalogue from the configured index.
 type apiHandlers struct {
 	sandbox sandbox.ImageSandbox
-	library *library.Index
+	library *libraryState
 }
 
 // registerAPI mounts the REST endpoints on mux under base. Method patterns
@@ -38,8 +38,7 @@ func registerAPI(mux *http.ServeMux, base string, deps apiHandlers) {
 	mux.HandleFunc("GET "+base+"/gradient", handleGradient)
 	mux.HandleFunc("GET "+base+"/contrast", handleContrastCheck)
 	mux.HandleFunc("GET "+base+"/random", handlePaletteRandom)
-	mux.HandleFunc("POST "+base+"/export/css", handleExportCSS)
-	mux.HandleFunc("POST "+base+"/export/tailwind", handleExportTailwind)
+	mux.HandleFunc("POST "+base+"/export", handleExport)
 	mux.HandleFunc("POST "+base+"/blindness/simulate", handleBlindnessSimulate)
 	mux.HandleFunc("POST "+base+"/extract", deps.handleExtract)
 	registerLibrary(mux, base, deps.library)
@@ -194,6 +193,7 @@ func handleGradient(w http.ResponseWriter, r *http.Request) {
 	from := strings.TrimSpace(q.Get("from"))
 	to := strings.TrimSpace(q.Get("to"))
 	stopsRaw := strings.TrimSpace(q.Get("stops"))
+	positionsRaw := strings.TrimSpace(q.Get("positions"))
 	stepsStr := strings.TrimSpace(q.Get("steps"))
 	space := strings.ToLower(strings.TrimSpace(q.Get("space")))
 	easing := strings.ToLower(strings.TrimSpace(q.Get("easing")))
@@ -226,7 +226,18 @@ func handleGradient(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, perr)
 			return
 		}
-		colors, err = gradient.MultiStop(stops, opts)
+		// Positioned stops: an optional comma-separated 0..1 list parallel
+		// to stops=. Omitting it keeps the even-spacing default.
+		if positionsRaw != "" {
+			positions, pperr := parsePositionList(positionsRaw)
+			if pperr != nil {
+				writeError(w, http.StatusBadRequest, pperr)
+				return
+			}
+			colors, err = gradient.MultiStopAt(stops, positions, opts)
+		} else {
+			colors, err = gradient.MultiStop(stops, opts)
+		}
 	case from != "" && to != "":
 		fromC, ferr := color.Parse(from)
 		if ferr != nil {
@@ -257,12 +268,13 @@ func handleGradient(w http.ResponseWriter, r *http.Request) {
 		"easing": string(opts.Easing),
 	}
 	params := map[string]any{
-		"from":   from,
-		"to":     to,
-		"stops":  stopsRaw,
-		"steps":  steps,
-		"space":  space,
-		"easing": easing,
+		"from":      from,
+		"to":        to,
+		"stops":     stopsRaw,
+		"positions": positionsRaw,
+		"steps":     steps,
+		"space":     space,
+		"easing":    easing,
 	}
 	writePaletteJSON(w, "gradient.generate", params, pal)
 }
@@ -368,75 +380,42 @@ func handlePaletteRandom(w http.ResponseWriter, r *http.Request) {
 	writePaletteJSON(w, "palette.random", params, pal)
 }
 
-// ---------- /export/css ----------
+// ---------- /export ----------
 
-type exportCSSRequest struct {
+// exportFormats is the set of formats POST /export accepts — every
+// exporter.AllFormats entry. Built once from the exporter's canonical
+// list so a newly added format needs no change here.
+var exportFormats = func() map[exporter.Format]bool {
+	m := make(map[exporter.Format]bool, len(exporter.AllFormats))
+	for _, f := range exporter.AllFormats {
+		m[f] = true
+	}
+	return m
+}()
+
+type exportRequest struct {
+	Format string   `json:"format"`
 	Colors []string `json:"colors"`
 	Name   string   `json:"name,omitempty"`
 	Kind   string   `json:"kind,omitempty"`
-}
-
-type exportResult struct {
-	Format   string `json:"format"`
-	Kind     string `json:"kind,omitempty"`
-	Content  string `json:"content"`
-	Filename string `json:"filename"`
-}
-
-func handleExportCSS(w http.ResponseWriter, r *http.Request) {
-	var req exportCSSRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	if len(req.Colors) == 0 {
-		writeError(w, http.StatusBadRequest, errors.New("no colors provided"))
-		return
-	}
-	cs, err := parseColorList(req.Colors)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	format, err := cssKindToFormat(req.Kind)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	name := strings.TrimSpace(req.Name)
-	if name == "" {
-		name = "color"
-	}
-	pal := palette.New(cs)
-	pal.Name = name
-	data, err := exporter.Export(pal, format, exporter.Options{Prefix: name, Name: name})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	kind := strings.ToLower(strings.TrimSpace(req.Kind))
-	if kind == "" {
-		kind = "vars"
-	}
-	res := exportResult{
-		Format:   string(format),
-		Kind:     kind,
-		Content:  string(data),
-		Filename: name + "." + exporter.FileExtension(format),
-	}
-	writeEnvelope(w, "export.css", map[string]any{"colors": req.Colors, "name": name, "kind": kind}, res)
-}
-
-// ---------- /export/tailwind ----------
-
-type exportTailwindRequest struct {
-	Colors []string `json:"colors"`
-	Name   string   `json:"name,omitempty"`
 	Shades int      `json:"shades,omitempty"`
 }
 
-func handleExportTailwind(w http.ResponseWriter, r *http.Request) {
-	var req exportTailwindRequest
+type exportResult struct {
+	Format string `json:"format"`
+	Kind   string `json:"kind,omitempty"`
+	// Content is the rendered output. For binary formats (png/jpeg) it is
+	// base64-encoded and Encoding is set to "base64"; text formats carry
+	// the raw rendering and omit Encoding.
+	Content  string `json:"content"`
+	Encoding string `json:"encoding,omitempty"`
+	Filename string `json:"filename"`
+}
+
+// handleExport renders a color list into any exporter format. Binary
+// formats are base64-encoded so the JSON envelope stays valid text.
+func handleExport(w http.ResponseWriter, r *http.Request) {
+	var req exportRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -444,6 +423,30 @@ func handleExportTailwind(w http.ResponseWriter, r *http.Request) {
 	if len(req.Colors) == 0 {
 		writeError(w, http.StatusBadRequest, errors.New("no colors provided"))
 		return
+	}
+	format := exporter.Format(strings.ToLower(strings.TrimSpace(req.Format)))
+	if format == "" {
+		writeError(w, http.StatusBadRequest, errors.New("format is required"))
+		return
+	}
+	if !exportFormats[format] {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("unknown format %q", format))
+		return
+	}
+	// `kind` is the CSS-family dialect alias kept for parity with
+	// /export/css; it only refines format=css and is rejected elsewhere.
+	kind := strings.TrimSpace(req.Kind)
+	if kind != "" {
+		if format != exporter.FormatCSS {
+			writeError(w, http.StatusBadRequest,
+				fmt.Errorf("kind is only valid with format=css (got format=%q)", format))
+			return
+		}
+		var err error
+		if format, err = cssKindToFormat(kind); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
 	}
 	if req.Shades < 0 {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("shades must be ≥ 0 (got %d)", req.Shades))
@@ -460,7 +463,7 @@ func handleExportTailwind(w http.ResponseWriter, r *http.Request) {
 	}
 	pal := palette.New(cs)
 	pal.Name = name
-	data, err := exporter.Export(pal, exporter.FormatTailwind, exporter.Options{
+	data, err := exporter.Export(pal, format, exporter.Options{
 		Prefix:         name,
 		Name:           name,
 		TailwindShades: req.Shades,
@@ -470,11 +473,23 @@ func handleExportTailwind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res := exportResult{
-		Format:   string(exporter.FormatTailwind),
+		Format:   string(format),
 		Content:  string(data),
-		Filename: name + "." + exporter.FileExtension(exporter.FormatTailwind),
+		Filename: name + "." + exporter.FileExtension(format),
 	}
-	writeEnvelope(w, "export.tailwind", map[string]any{"colors": req.Colors, "name": name, "shades": req.Shades}, res)
+	if exporter.IsBinary(format) {
+		res.Content = base64.StdEncoding.EncodeToString(data)
+		res.Encoding = "base64"
+	}
+	params := map[string]any{"format": req.Format, "colors": req.Colors, "name": name}
+	if kind != "" {
+		res.Kind = strings.ToLower(kind)
+		params["kind"] = res.Kind
+	}
+	if req.Shades > 0 {
+		params["shades"] = req.Shades
+	}
+	writeEnvelope(w, "export", params, res)
 }
 
 // ---------- /blindness/simulate ----------
@@ -561,6 +576,22 @@ func parseColorList(in []string) ([]color.Color, error) {
 	return out, nil
 }
 
+// parsePositionList parses a comma-separated list of gradient stop
+// positions (each a 0..1 float). Ordering / endpoint validation is left
+// to gradient.MultiStopAt so the rules live in one place.
+func parsePositionList(raw string) ([]float64, error) {
+	parts := strings.Split(raw, ",")
+	out := make([]float64, len(parts))
+	for i, p := range parts {
+		v, err := strconv.ParseFloat(strings.TrimSpace(p), 64)
+		if err != nil {
+			return nil, fmt.Errorf("positions[%d] %q: %w", i, p, err)
+		}
+		out[i] = v
+	}
+	return out, nil
+}
+
 // resolveHarmonyType matches user input against the canonical harmony
 // names with the same aliases the CLI/MCP accept ("split", "double").
 func resolveHarmonyType(raw string) (harmony.Type, error) {
@@ -579,6 +610,7 @@ func resolveHarmonyType(raw string) (harmony.Type, error) {
 		harmony.Tetradic,
 		harmony.Square,
 		harmony.DoubleComplementary,
+		harmony.Compound,
 		harmony.Monochromatic,
 		harmony.Shades,
 	}

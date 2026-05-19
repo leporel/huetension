@@ -46,6 +46,22 @@ func TestHarmonyCmdAnalogousCount(t *testing.T) {
 	}
 }
 
+func TestHarmonyCmdTextIncludesHSLAndHSV(t *testing.T) {
+	stdout := withStdoutBuffer(t)
+
+	cmd := newHarmonyCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"analogous", "royalblue", "--count", "5", "--format", "text"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if out := stdout.String(); !strings.Contains(out, "hsl(") || !strings.Contains(out, "hsv(") {
+		t.Errorf("text output should include hsl and hsv columns:\n%s", out)
+	}
+}
+
 func TestHarmonyCmdRejectsUnknownType(t *testing.T) {
 	cmd := newHarmonyCmd()
 	cmd.SetOut(&bytes.Buffer{})

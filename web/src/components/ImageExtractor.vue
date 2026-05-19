@@ -1,16 +1,62 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { extractFile, extractUrl, type ExtractMethod } from '../api/extract';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+  extractFile,
+  extractUrl,
+  type ExtractMethod,
+  type ExtractOptions,
+  type SoftPreset,
+} from '../api/extract';
 import { useWorkspaceStore, type WorkspaceSlot } from '../stores/workspace';
 import { useExtractionStore } from '../stores/extraction';
+import { useHarmonyStore } from '../stores/harmony';
 import type { ColorJSON } from '../api/types';
 
 const workspace = useWorkspaceStore();
 const extraction = useExtractionStore();
+const harmony = useHarmonyStore();
 
 const urlInput = ref('');
 const count = ref(5);
 const method = ref<ExtractMethod>('soft');
+const preset = ref<SoftPreset>('default');
+
+// All ten internal/extract methods, with display labels.
+const METHODS: { value: ExtractMethod; label: string }[] = [
+  { value: 'soft', label: 'soft' },
+  { value: 'softk', label: 'soft-k' },
+  { value: 'kmeans', label: 'k-means' },
+  { value: 'okkmeans', label: 'ok-k-means' },
+  { value: 'wkmeans', label: 'weighted k-means' },
+  { value: 'mediancut', label: 'median-cut' },
+  { value: 'octree', label: 'octree' },
+  { value: 'wu', label: 'wu' },
+  { value: 'popularity', label: 'popularity' },
+  { value: 'dbscan', label: 'dbscan' },
+];
+const PRESETS: SoftPreset[] = [
+  'default',
+  'colorful',
+  'bright',
+  'muted',
+  'deep',
+  'dark',
+];
+
+// The soft preset applies only to the soft pipeline — the backend 400s
+// if it is sent with any other method, so it is gated both in the UI
+// (the select is hidden) and on the wire (omitted from currentOpts).
+const isSoftMethod = computed(
+  () => method.value === 'soft' || method.value === 'softk',
+);
+
+function currentOpts(): ExtractOptions {
+  return {
+    size: count.value,
+    method: method.value,
+    soft_preset: isSoftMethod.value ? preset.value : undefined,
+  };
+}
 
 const loading = ref(false);
 const errorMsg = ref<string | null>(null);
@@ -81,6 +127,13 @@ function applyToWorkspace(palette: ColorJSON[]): void {
     }
   }
   workspace.setColors(next);
+  // An extracted palette is a wholesale replace — sync the harmony
+  // store so the Count slider matches the new length and a later Count
+  // change resizes the palette instead of regenerating a stale harmony
+  // from slot 0. (Harmony state is session-only, not undone — the
+  // extraction stays one undo snapshot.)
+  harmony.setType('custom');
+  harmony.setCount(next.length);
 }
 
 async function runFileExtract(file: File) {
@@ -89,7 +142,7 @@ async function runFileExtract(file: File) {
   try {
     const blobUrl = URL.createObjectURL(file);
     const { w, h } = await loadImageNaturalSize(blobUrl);
-    const res = await extractFile(file, { count: count.value, method: method.value });
+    const res = await extractFile(file, currentOpts());
     extraction.setImage({
       kind: 'file',
       url: blobUrl,
@@ -112,10 +165,7 @@ async function runUrlExtract() {
   errorMsg.value = null;
   loading.value = true;
   try {
-    const res = await extractUrl(urlInput.value.trim(), {
-      count: count.value,
-      method: method.value,
-    });
+    const res = await extractUrl(urlInput.value.trim(), currentOpts());
     const { w, h } = await loadImageNaturalSize(urlInput.value.trim());
     extraction.setImage({
       kind: 'url',
@@ -142,6 +192,35 @@ async function rerun() {
     await runUrlExtract();
   }
 }
+
+// Changing the method or soft preset re-extracts the loaded image
+// immediately — no separate Re-run click. A no-op when nothing is
+// loaded (rerun has nothing to act on).
+watch([method, preset], () => {
+  void rerun();
+});
+
+// Ctrl+V / Cmd+V anywhere on the page extracts a clipboard image — a
+// pasted screenshot goes straight into the dropzone. Text pastes are
+// left untouched: only an image item in the clipboard is consumed.
+function onPaste(e: ClipboardEvent): void {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item && item.kind === 'file' && item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) {
+        e.preventDefault();
+        void runFileExtract(file);
+      }
+      return;
+    }
+  }
+}
+
+onMounted(() => document.addEventListener('paste', onPaste));
+onBeforeUnmount(() => document.removeEventListener('paste', onPaste));
 </script>
 
 <template>
@@ -172,8 +251,8 @@ async function rerun() {
         >
           <path d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" />
         </svg>
-        <div class="dz-title">Drop an image or click to upload</div>
-        <div class="dz-sub mono">PNG · JPG · WebP · GIF</div>
+        <div class="dz-title">Drop, paste, or click to upload an image</div>
+        <div class="dz-sub mono">PNG · JPG · WebP · GIF · ⌃V to paste</div>
       </div>
       <div v-else class="dz-preview">
         <img :src="extraction.image.url" alt="extraction source" />
@@ -185,15 +264,20 @@ async function rerun() {
       <label class="fld">
         <span>Method</span>
         <select v-model="method">
-          <option value="soft">soft</option>
-          <option value="freq">freq</option>
-          <option value="kmeans">k-means</option>
-          <option value="median">median-cut</option>
+          <option v-for="m in METHODS" :key="m.value" :value="m.value">
+            {{ m.label }}
+          </option>
         </select>
       </label>
       <label class="fld">
         <span>Count <span class="count-val mono">{{ count }}</span></span>
         <input v-model.number="count" type="range" min="2" max="12" />
+      </label>
+      <label v-if="isSoftMethod" class="fld">
+        <span>Soft preset</span>
+        <select v-model="preset">
+          <option v-for="p in PRESETS" :key="p" :value="p">{{ p }}</option>
+        </select>
       </label>
     </div>
 
@@ -299,9 +383,12 @@ async function rerun() {
   text-transform: uppercase;
 }
 
+/* Single column: the controls sit in a narrow (~220px) slot, too tight
+   for two selects side by side once long method names like "weighted
+   k-means" appear — stacking gives each control the full width. */
 .controls {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
@@ -309,6 +396,7 @@ async function rerun() {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
   font-size: 11px;
   color: var(--fg-2);
   font-weight: 500;
@@ -323,6 +411,12 @@ async function rerun() {
   color: var(--fg-0);
   font-family: inherit;
   font-size: 12px;
+}
+
+/* Keep the select inside its column — a long option must not widen it. */
+.fld select {
+  width: 100%;
+  min-width: 0;
 }
 
 .url-input {

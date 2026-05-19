@@ -1,7 +1,8 @@
 // Package exporter renders a *palette.Palette into one of several text
 // formats: JSON (the huetension/v1 wire contract), CSS custom properties,
 // SCSS variables, a Tailwind theme.extend.colors snippet, plain hex per
-// line, and the GIMP .gpl format.
+// line, the GIMP .gpl palette and .ggr gradient formats, and a standalone
+// SVG <linearGradient>.
 //
 // The package has a single Export entrypoint dispatching by Format. Each
 // format lives in its own file so adding a new one is a matter of writing
@@ -27,6 +28,11 @@ const (
 	FormatTailwind Format = "tailwind"
 	FormatPlain    Format = "txt"
 	FormatGPL      Format = "gpl"
+	// FormatGGR is a GIMP gradient; FormatSVG a standalone SVG document
+	// with a <linearGradient>. Both treat the palette's colors as gradient
+	// stops (see ggr.go / svg.go).
+	FormatGGR Format = "ggr"
+	FormatSVG Format = "svg"
 	// FormatPNG / FormatJPEG render the palette as a horizontal strip of
 	// solid swatches. Useful for thumbnails, design-review screenshots, and
 	// the "save palette next to the source image" workflow. Output is
@@ -46,6 +52,8 @@ var AllFormats = []Format{
 	FormatTailwind,
 	FormatPlain,
 	FormatGPL,
+	FormatGGR,
+	FormatSVG,
 	FormatPNG,
 	FormatJPEG,
 }
@@ -125,12 +133,24 @@ func Export(p *palette.Palette, format Format, opts Options) ([]byte, error) {
 		return renderPlain(p), nil
 	case FormatGPL:
 		return renderGPL(p, opts), nil
+	case FormatGGR:
+		return renderGGR(p, opts), nil
+	case FormatSVG:
+		return renderSVG(p, opts), nil
 	case FormatPNG:
 		return renderSwatchPNG(p, opts)
 	case FormatJPEG:
 		return renderSwatchJPEG(p, opts)
 	}
 	return nil, fmt.Errorf("%w: %q", ErrUnknownFormat, format)
+}
+
+// IsBinary reports whether a Format renders to binary bytes rather than
+// text. Only the image formats (PNG / JPEG) are binary; every other
+// format is UTF-8 text. Callers that must encode the output for a text
+// transport (e.g. the JSON wire envelope) use this to decide on base64.
+func IsBinary(format Format) bool {
+	return format == FormatPNG || format == FormatJPEG
 }
 
 // FileExtension returns the conventional file extension for a Format,
@@ -151,6 +171,10 @@ func FileExtension(format Format) string {
 		return "txt"
 	case FormatGPL:
 		return "gpl"
+	case FormatGGR:
+		return "ggr"
+	case FormatSVG:
+		return "svg"
 	case FormatPNG:
 		return "png"
 	case FormatJPEG:
@@ -179,6 +203,10 @@ func FormatFromExtension(ext string) (Format, bool) {
 		return FormatPlain, true
 	case "gpl", ".gpl":
 		return FormatGPL, true
+	case "ggr", ".ggr":
+		return FormatGGR, true
+	case "svg", ".svg":
+		return FormatSVG, true
 	case "png", ".png":
 		return FormatPNG, true
 	case "jpg", "jpeg", ".jpg", ".jpeg":

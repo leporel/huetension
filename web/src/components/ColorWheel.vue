@@ -3,10 +3,10 @@ import { computed, ref } from 'vue';
 import { useWorkspaceStore } from '../stores/workspace';
 import { useHarmonyStore } from '../stores/harmony';
 import {
-  fromHex,
-  fromHSL,
+  fromHSV,
   toHex,
-  toHSL,
+  rybHueToRgbHue,
+  rgbHueToRybHue,
 } from '../composables/useColor';
 import { useHarmonyApply } from '../composables/useHarmonyApply';
 import {
@@ -14,36 +14,46 @@ import {
   type WheelGeometry,
 } from '../composables/useHandleGesture';
 
-// Geometry: SVG is fixed 320×320 at CSS-px (matches design source
-// .wheel { width: 320px; height: 320px; }). Ring sits between
-// rInner and rOuter; mask gives the visible donut.
+// Geometry: SVG/disc is fixed 320×320 CSS-px. The disc is an RYB
+// artist-wheel surface — angle = RYB hue, radius = saturation (0 at
+// centre, 1 at the rim). R_OUTER is the saturation-1 radius; the disc
+// div fills the 320px box (radius 160), so handles sit 2px inside the rim.
 const SIZE = 320;
 const CENTER = SIZE / 2;
 const R_OUTER = 158;
-const R_INNER = 102;
 
-// One lightness scroll-notch shifts HSL.l by this amount.
-const LIGHT_STEP = 0.04;
+// One value scroll-notch shifts HSV.v by this amount.
+const VALUE_STEP = 0.04;
+
+/**
+ * Build the disc background from the RYB hue table — 25 stops every
+ * 15°. conic `from 90deg` + reversed stop order puts RYB hue 0 (red)
+ * at 3 o'clock growing counter-clockwise, matching handlePosition.
+ */
+function buildDiscGradient(): string {
+  const stops: string[] = [];
+  for (let k = 0; k <= 24; k++) {
+    // -15·k walks screen angles 0, 345, 330, …, 15, 0; each stop shows
+    // the RGB hue the RYB wheel maps that artist angle to.
+    stops.push(`hsl(${rybHueToRgbHue(-15 * k)} 100% 50%)`);
+  }
+  return (
+    'radial-gradient(circle closest-side at 50% 50%, ' +
+    'hsl(0 0% 50%), hsl(0 0% 50% / 0)), ' +
+    `conic-gradient(from 90deg, ${stops.join(', ')})`
+  );
+}
+
+// Generated once — the RYB table is constant, so the disc never changes.
+const DISC_GRADIENT = buildDiscGradient();
 
 const workspace = useWorkspaceStore();
 const harmony = useHarmonyStore();
 const { applyBaseRGB } = useHarmonyApply();
 const root = ref<HTMLElement | null>(null);
 
-/**
- * In hue-rotation modes only slot 0 carries a handle — dragging it
- * rotates the whole palette per Kuler convention. In Custom mode
- * every unlocked slot gets its own handle. Analogous / Monochromatic
- * / Shades are count-driven (no anchor table) — treated like
- * single-handle modes since dragging non-base slots independently
- * would break the harmony invariant.
- */
-const handleSlots = computed<number[]>(() => {
-  if (harmony.type === 'custom') {
-    return workspace.colors.map((_, i) => i);
-  }
-  return [0];
-});
+// Slot whose handle is under the pointer — drives paint order only.
+const hoveredSlot = ref<number | null>(null);
 
 interface HandleView {
   slot: number;
@@ -54,64 +64,102 @@ interface HandleView {
 }
 
 /**
- * Compute pixel position for a slot's handle. Angle = HSL hue
- * (degrees, 0° at +x going clockwise). Radius = rInner + s * span
- * so the handle rides on the ring's outer edge at saturation 1 and
- * on the inner edge at saturation 0.
+ * Pixel position for a slot's handle on the RYB disc. Angle = the
+ * colour's RYB artist-wheel hue — its HSV hue mapped through
+ * `rgbHueToRybHue` — (0° at +x, growing counter-clockwise); radius =
+ * saturation × R_OUTER. Inverse of useHandleGesture's pointer→artist
+ * angle, so a handle reads back where it was placed.
+ *
+ * Hue/sat come from `effectiveHSV`, not the raw hex: a colour at an
+ * achromatic extreme (black / grey) has no recoverable hue, but the
+ * intent does — so the handle stays put instead of snapping to centre.
  */
-function handlePosition(hex: string): { cx: number; cy: number } {
-  const hsl = toHSL(fromHex(hex));
-  const span = R_OUTER - R_INNER;
-  const r = R_INNER + hsl.s * span;
-  // Match the gesture composable's pointerAngle: 0° at +x, clockwise.
-  // SVG Y goes down, so positive angle means cos(+x), -sin(+y).
-  const rad = (hsl.h * Math.PI) / 180;
+function handlePosition(slot: number): { cx: number; cy: number } {
+  const hsv = workspace.effectiveHSV(slot);
+  const r = hsv.s * R_OUTER;
+  // The disc angle is the RYB artist-wheel hue, not the HSV hue.
+  const rad = (rgbHueToRybHue(hsv.h) * Math.PI) / 180;
   return {
     cx: CENTER + r * Math.cos(rad),
     cy: CENTER - r * Math.sin(rad),
   };
 }
 
+/**
+ * Every slot carries a draggable handle, in every harmony mode.
+ * Dragging slot 0 propagates through the active harmony; dragging any
+ * other slot is an individual edit that flips the palette to 'custom'
+ * (see applyDrag). Unconditional on purpose — it must not read
+ * harmony.type, or the flip would re-key this list mid-gesture.
+ */
 const handles = computed<HandleView[]>(() =>
-  handleSlots.value.map((slot) => {
-    const c = workspace.colors[slot];
+  workspace.colors.map((c, slot) => {
     const hex = c?.hex ?? '#888888';
-    const locked = c?.locked ?? false;
-    return { slot, hex, locked, ...handlePosition(hex) };
+    return { slot, hex, locked: c?.locked ?? false, ...handlePosition(slot) };
   }),
 );
+
+/**
+ * Same handles, reordered so the selected one — then the hovered one —
+ * paint last (DOM order = stacking order here). Overlapping handles,
+ * e.g. several near-grey slots bunched at the disc centre, stay
+ * individually grabbable. Array.sort is stable, so equal-rank
+ * handles keep their slot order.
+ */
+const orderedHandles = computed<HandleView[]>(() => {
+  const rank = (slot: number): number => {
+    if (slot === hoveredSlot.value) return 2;
+    if (slot === workspace.selectedSlot) return 1;
+    return 0;
+  };
+  return handles.value.slice().sort((a, b) => rank(a.slot) - rank(b.slot));
+});
 
 function geometryFor(): WheelGeometry {
   const el = root.value;
   if (!el) {
-    return { cx: 0, cy: 0, rOuter: R_OUTER, rInner: R_INNER };
+    return { cx: 0, cy: 0, rOuter: R_OUTER };
   }
-  // The wheel SVG is 320 CSS-px regardless of zoom; getBoundingClientRect
-  // gives us the on-screen center in viewport coords, which is what the
-  // gesture composable compares pointer events against.
+  // The wheel is 320 CSS-px; getBoundingClientRect gives the on-screen
+  // center in viewport coords, which is what the gesture composable
+  // compares pointer events against.
   const rect = el.getBoundingClientRect();
   return {
     cx: rect.left + rect.width / 2,
     cy: rect.top + rect.height / 2,
     rOuter: (R_OUTER / SIZE) * rect.width,
-    rInner: (R_INNER / SIZE) * rect.width,
   };
 }
 
-function startHSL(slot: number) {
-  const c = workspace.colors[slot];
-  if (!c) return { h: 0, s: 0, l: 0 };
-  return toHSL(fromHex(c.hex));
+function startHSV(slot: number) {
+  // effectiveHSV preserves hue/sat through achromatic extremes, so a
+  // gesture starting on such a handle begins from the intended angle.
+  return workspace.effectiveHSV(slot);
 }
 
 function applyDrag(
   slot: number,
   hue: number,
   sat: number,
-  lightness: number,
+  value: number,
 ): void {
-  const rgb = fromHSL(hue, sat, lightness);
-  if (slot === 0) {
+  const rgb = fromHSV(hue, sat, value);
+  // Record the HSV intent before the hex write — effectiveHSV must
+  // never see a fresh hex against a stale intent (a one-frame flicker).
+  workspace.recordSlotHsv(slot, { h: hue, s: sat, v: value });
+  // The base handle is at `harmony.baseIndex` (slot 0 for hue-rotation
+  // harmonies, the centre for Analogous / Monochromatic — not always 0).
+  // Dragging it propagates the harmony; dragging any other handle is an
+  // individual edit that ends the harmony (→ 'custom'), the same
+  // contract library and image loads follow.
+  const isBase = slot === harmony.baseIndex;
+  // A non-base drag normally ends the harmony (→ 'custom'); the
+  // Independent-S/V toggle suppresses that, keeping the harmony's hues
+  // while this slot's saturation/value is tweaked in place.
+  if (!isBase && harmony.type !== 'custom' && !harmony.independentSV) {
+    harmony.setType('custom');
+  }
+  if (isBase) {
     applyBaseRGB(rgb);
     return;
   }
@@ -122,18 +170,31 @@ function onDrag(
   slot: number,
   d: { hue: number; saturation: number },
 ): void {
-  const start = startHSL(slot);
-  applyDrag(slot, d.hue, d.saturation, start.l);
+  const start = startHSV(slot);
+  // With "Independent S/V" on, a non-base handle is hue-locked to the
+  // harmony — the drag tweaks saturation (radius) only, hue held.
+  if (
+    harmony.independentSV &&
+    harmony.type !== 'custom' &&
+    slot !== harmony.baseIndex
+  ) {
+    applyDrag(slot, start.h, d.saturation, start.v);
+    return;
+  }
+  // d.hue is an RYB artist-wheel angle; map it back to an HSV hue
+  // before applying.
+  applyDrag(slot, rybHueToRgbHue(d.hue), d.saturation, start.v);
 }
 
-function onLightnessStep(slot: number, steps: number): void {
-  const c = workspace.colors[slot];
-  if (!c) return;
-  const hsl = toHSL(fromHex(c.hex));
-  let l = hsl.l + steps * LIGHT_STEP;
-  if (l < 0) l = 0;
-  if (l > 1) l = 1;
-  applyDrag(slot, hsl.h, hsl.s, l);
+function onValueStep(slot: number, steps: number): void {
+  if (!workspace.colors[slot]) return;
+  // effectiveHSV so a scroll on a colour already at an extreme keeps
+  // its hue/sat, consistent with the per-color sliders.
+  const hsv = workspace.effectiveHSV(slot);
+  let v = hsv.v + steps * VALUE_STEP;
+  if (v < 0) v = 0;
+  if (v > 1) v = 1;
+  applyDrag(slot, hsv.h, hsv.s, v);
 }
 
 const {
@@ -145,11 +206,20 @@ const {
 } = useHandleGesture({
   getGeometry: geometryFor,
   isLocked: (slot) => workspace.colors[slot]?.locked ?? false,
-  getStartHSL: startHSL,
+  getStartHSV: startHSV,
   onDrag,
-  onLightnessStep,
+  onValueStep,
   history: workspace.historyAdapter,
 });
+
+// Pressing a handle also selects its slot — so the wheel, palette
+// strip, and (later) per-color controls all act on the same color.
+// Locked slots still select (you may want to inspect one on top) even
+// though the gesture itself short-circuits.
+function onHandlePointerDown(e: PointerEvent, slot: number): void {
+  workspace.selectSlot(slot);
+  onPointerDown(e, slot);
+}
 
 /**
  * Snap to a hex on a slot's handle without a gesture. Exposed for
@@ -161,31 +231,14 @@ defineExpose({
     workspace.setHex(slot, hex);
   },
 });
-
-// Optional: clicking inside the inner core resets slot 0 to neutral
-// gray — handy for "I dragged off the wheel by accident" recovery.
-// Documented gesture in slice plan §5; kept here even though it's a
-// tiny UX nicety so the wheel feels finished, not stub-ish.
-function onCoreClick() {
-  if (workspace.colors[0]?.locked) return;
-  const cur = workspace.colors[0];
-  if (!cur) return;
-  const hsl = toHSL(fromHex(cur.hex));
-  applyDrag(0, hsl.h, 0, hsl.l);
-}
-
-// Touch tap-and-hold fallback (lightness rail) is deferred to S5b
-// per the slice plan — mouse + trackpad covers desktop fully, and
-// the rail needs design polish best done together with the picker.
 </script>
 
 <template>
   <div ref="root" class="wheel" :style="{ width: SIZE + 'px', height: SIZE + 'px' }">
-    <div class="ring" />
-    <div class="core" @click="onCoreClick" />
+    <div class="disc" :style="{ background: DISC_GRADIENT }" />
     <svg class="overlay" :width="SIZE" :height="SIZE" :viewBox="`0 0 ${SIZE} ${SIZE}`">
       <line
-        v-for="h in handles"
+        v-for="h in orderedHandles"
         :key="`l-${h.slot}`"
         :x1="CENTER"
         :y1="CENTER"
@@ -195,21 +248,28 @@ function onCoreClick() {
       />
     </svg>
     <button
-      v-for="h in handles"
+      v-for="h in orderedHandles"
       :key="h.slot"
       type="button"
       class="node"
-      :class="{ locked: h.locked, primary: h.slot === 0, dragging: isDragging }"
+      :class="{
+        locked: h.locked,
+        primary: harmony.type !== 'custom' && h.slot === harmony.baseIndex,
+        selected: h.slot === workspace.selectedSlot,
+        dragging: isDragging,
+      }"
       :style="{
         left: h.cx + 'px',
         top: h.cy + 'px',
         background: h.hex,
       }"
       :aria-label="`slot ${h.slot} ${h.hex}`"
-      @pointerdown="onPointerDown($event, h.slot)"
+      @pointerdown="onHandlePointerDown($event, h.slot)"
       @pointermove="onPointerMove($event)"
       @pointerup="onPointerUp($event)"
       @pointercancel="onPointerUp($event)"
+      @pointerenter="hoveredSlot = h.slot"
+      @pointerleave="hoveredSlot = null"
       @wheel.prevent="onWheel($event, h.slot)"
     />
   </div>
@@ -221,44 +281,18 @@ function onCoreClick() {
   margin: 6px auto 0;
 }
 
-.ring {
+/* RYB artist-wheel disc. The background is built in script
+   (DISC_GRADIENT) from the RYB hue table and bound inline — `from
+   90deg` + reversed stops put RYB hue 0 (red) at 3 o'clock growing
+   counter-clockwise, matching handlePosition. The radial-gradient
+   fades a mid-grey from the centre out: centre desaturated, rim
+   full-chroma. */
+.disc {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: conic-gradient(
-    hsl(0 80% 55%),
-    hsl(30 85% 58%),
-    hsl(60 85% 60%),
-    hsl(90 70% 55%),
-    hsl(120 65% 50%),
-    hsl(150 60% 50%),
-    hsl(180 60% 50%),
-    hsl(210 65% 55%),
-    hsl(240 70% 60%),
-    hsl(270 65% 58%),
-    hsl(300 70% 58%),
-    hsl(330 75% 58%),
-    hsl(360 80% 55%)
-  );
-  -webkit-mask: radial-gradient(circle, transparent 100px, #000 102px, #000 158px, transparent 160px);
-  mask: radial-gradient(circle, transparent 100px, #000 102px, #000 158px, transparent 160px);
-}
-
-.core {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 200px;
-  height: 200px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 50% 50%,
-    oklch(0.30 0.01 50) 0,
-    oklch(0.22 0.008 50) 70%
-  );
-  border: 1px solid var(--line-soft);
-  cursor: pointer;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px var(--line-soft);
 }
 
 .overlay {
@@ -293,7 +327,29 @@ function onCoreClick() {
   height: 26px;
   box-shadow:
     0 0 0 2px oklch(0.18 0.008 50),
-    0 0 0 4px var(--accent-line);
+    0 0 0 4px var(--accent);
+}
+
+/* Base-handle marker — a centre dot, white with a dark ring so it reads
+   on any swatch colour. Makes the harmony anchor unmistakable. */
+.node.primary::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: oklch(1 0 0 / 0.95);
+  box-shadow: 0 0 0 1.5px oklch(0 0 0 / 0.5);
+}
+
+/* Selection is an outline — a separate render layer from the box-shadow
+   rings, so it composes cleanly on top of .primary / .locked. */
+.node.selected {
+  outline: 2px solid var(--fg-0);
+  outline-offset: 4px;
 }
 
 .node.locked {

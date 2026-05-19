@@ -48,12 +48,13 @@ func TestHarmonyGenerateComplementary(t *testing.T) {
 	if out.Result.Colors[0].Hex != "#ff0000" {
 		t.Errorf("first = %q, want #ff0000", out.Result.Colors[0].Hex)
 	}
-	if out.Result.Colors[1].Hex != "#00ffff" {
-		t.Errorf("second = %q, want #00ffff", out.Result.Colors[1].Hex)
+	// On the RYB artist wheel red's complement is green, not cyan.
+	if out.Result.Colors[1].Hex != "#00ff4d" {
+		t.Errorf("second = %q, want #00ff4d (RYB green complement)", out.Result.Colors[1].Hex)
 	}
 }
 
-func TestHarmonyGenerateKulerCount(t *testing.T) {
+func TestHarmonyGenerateCountExpansion(t *testing.T) {
 	_, out, err := handleHarmonyGenerate(context.Background(), nil, HarmonyGenerateParams{
 		Type:  "complementary",
 		Base:  "red",
@@ -63,7 +64,7 @@ func TestHarmonyGenerateKulerCount(t *testing.T) {
 		t.Fatalf("handleHarmonyGenerate: %v", err)
 	}
 	if out.Result.Size != 5 {
-		t.Errorf("size = %d, want 5 (Kuler expansion)", out.Result.Size)
+		t.Errorf("size = %d, want 5 (extra-slot expansion)", out.Result.Size)
 	}
 }
 
@@ -233,7 +234,7 @@ func TestPaletteRandomHarmony(t *testing.T) {
 		t.Fatalf("handlePaletteRandom: %v", err)
 	}
 	if out.Result.Size != 5 {
-		t.Errorf("size = %d, want 5 (Kuler expansion of 3-anchor triadic)", out.Result.Size)
+		t.Errorf("size = %d, want 5 (extra-slot expansion of 3-anchor triadic)", out.Result.Size)
 	}
 }
 

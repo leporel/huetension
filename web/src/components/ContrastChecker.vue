@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import VChart from 'vue-echarts';
 import { useWorkspaceStore } from '../stores/workspace';
+import { useReviewStore } from '../stores/review';
 import { fromHex, toHex, type RGB } from '../composables/useColor';
 import { apca, wcag21 } from '../composables/useContrast';
 import { suggestLightnessFix, type FixResult } from '../composables/useContrastFix';
@@ -12,12 +13,20 @@ import { useChartTheme } from '../composables/useChartTheme';
  * `useContrast` (parity-pinned against the Go backend by
  * scripts/check-contrast-parity.ts).
  *
- * fg/bg are LOCAL state, seeded once from workspace slots 0+1. Tweaks
- * stay local so checking contrast never thrashes the shared palette;
- * the workspace swatch strip pulls colors in, "Sync to workspace"
- * pushes the pair back (locks honoured). This is the S7a design call.
+ * The palette swatches come from the shared *review palette*
+ * (`useReviewStore`) — a workspace snapshot edited independently by the
+ * analysis cards. A lightness slider under each foreground swatch, plus
+ * applied fixes, write back into that store, so the change shows here
+ * and in the Color-blindness card at once, without disturbing the
+ * generator's workspace. The slider edits only OkLCH lightness — the
+ * store keeps chroma + hue, so a swatch survives a trip to pure black /
+ * white. `fgIndex` / `bgIndex` track which review slot fg / bg
+ * mirror so an applied fix lands on the source swatch in place; typing a
+ * hex by hand drops that link. "↻ Reload" re-seeds the review palette
+ * from the workspace; "Sync to workspace" pushes the fg/bg pair back on
+ * an explicit click (locks honoured).
  *
- * "Suggest fixes" (S7b) sweeps the foreground's OkLCH lightness against
+ * "Suggest fixes" sweeps the foreground's OkLCH lightness against
  * the target and plots the search as an ECharts histogram — pass bars
  * green, the nearest passing lightness is one click to apply.
  */
@@ -25,18 +34,20 @@ import { useChartTheme } from '../composables/useChartTheme';
 type Algo = 'wcag21' | 'apca';
 
 const workspace = useWorkspaceStore();
+const review = useReviewStore();
 const chartTheme = useChartTheme();
 
 const algo = ref<Algo>('wcag21');
 
-function seed(i: number, fallback: string): string {
-  return workspace.colors[i]?.hex.toUpperCase() ?? fallback;
-}
-
 // Raw editable strings — may be mid-edit / invalid. `*Rgb` is the
 // validated view; contrast is computed only when both parse.
-const fg = ref(seed(0, '#1A1A1A'));
-const bg = ref(seed(1, '#FFFFFF'));
+const fg = ref(review.colors[0] ?? '#1A1A1A');
+const bg = ref(review.colors[1] ?? '#FFFFFF');
+
+// Which review-palette slot fg / bg currently mirror, or null when the
+// hex was typed by hand (no slot to write an applied fix back to).
+const fgIndex = ref<number | null>(review.colors.length > 0 ? 0 : null);
+const bgIndex = ref<number | null>(review.colors.length > 1 ? 1 : null);
 
 function parse(hex: string): RGB | null {
   try {
@@ -101,9 +112,56 @@ function normalize(which: 'fg' | 'bg'): void {
 }
 
 function swap(): void {
-  const t = fg.value;
-  fg.value = bg.value;
-  bg.value = t;
+  [fg.value, bg.value] = [bg.value, fg.value];
+  // Keep each slot link with its color through the swap, so a later
+  // applyFix still writes back to the right review-palette swatch.
+  [fgIndex.value, bgIndex.value] = [bgIndex.value, fgIndex.value];
+}
+
+/** Point the foreground at a review-palette slot. */
+function pickFg(i: number): void {
+  const hex = review.colors[i];
+  if (hex === undefined) return;
+  fgIndex.value = i;
+  fg.value = hex;
+}
+
+/** Point the background at a review-palette slot. */
+function pickBg(i: number): void {
+  const hex = review.colors[i];
+  if (hex === undefined) return;
+  bgIndex.value = i;
+  bg.value = hex;
+}
+
+/**
+ * Sweep a review swatch's lightness from its slider. The store holds
+ * each slot as an OkLCH intent and only L is touched here, so a swatch
+ * dragged to pure black / white keeps its chroma + hue. The change goes
+ * to the shared store (the Color-blindness card updates too) and mirrors
+ * into fg / bg while the slot is the active pair.
+ */
+function setSlotL(i: number, L: number): void {
+  review.setLightness(i, L);
+  const hex = review.colors[i];
+  if (hex === undefined) return;
+  if (fgIndex.value === i) fg.value = hex;
+  if (bgIndex.value === i) bg.value = hex;
+}
+
+function onSlideL(i: number, e: Event): void {
+  setSlotL(i, Number((e.target as HTMLInputElement).value));
+}
+
+/** Re-seed the review palette from the workspace and reset the pair. */
+function reloadPalette(): void {
+  review.reload();
+  const first = review.colors[0];
+  const second = review.colors[1];
+  fgIndex.value = first !== undefined ? 0 : null;
+  bgIndex.value = second !== undefined ? 1 : null;
+  if (first !== undefined) fg.value = first;
+  if (second !== undefined) bg.value = second;
 }
 
 /** Push the validated pair back to workspace slots 0+1 in one undo step. */
@@ -160,7 +218,13 @@ function runSuggest(): void {
 
 function applyFix(): void {
   const hex = fixResult.value?.suggested?.hex;
-  if (hex) fg.value = hex.toUpperCase();
+  if (!hex) return;
+  const up = hex.toUpperCase();
+  fg.value = up;
+  // Write the fix onto its source swatch in place — no slot reordering,
+  // and the Color-blindness card (same store) picks it up. A hand-typed
+  // foreground has no slot link, so there is nothing to write back.
+  if (fgIndex.value !== null) review.setColor(fgIndex.value, up);
 }
 
 function scoreText(v: number): string {
@@ -237,19 +301,31 @@ const fixChartOption = computed(() => {
               :class="{ bad: !fgRgb }"
               spellcheck="false"
               aria-label="foreground color hex"
+              @input="fgIndex = null"
               @change="normalize('fg')"
             />
           </div>
           <div class="ws-pick">
-            <button
-              v-for="(s, i) in workspace.colors"
-              :key="'fg' + i"
-              type="button"
-              class="ws-sw"
-              :style="{ background: s.hex }"
-              :title="`set foreground to ${s.hex}`"
-              @click="fg = s.hex.toUpperCase()"
-            />
+            <div v-for="(c, i) in review.colors" :key="'fg' + i" class="ws-cell">
+              <button
+                type="button"
+                class="ws-sw"
+                :class="{ active: fgIndex === i }"
+                :style="{ background: c }"
+                :title="`set foreground to ${c}`"
+                @click="pickFg(i)"
+              />
+              <input
+                type="range"
+                class="l-slider"
+                min="0"
+                max="1"
+                step="0.005"
+                :value="review.lightnessOf(i)"
+                :aria-label="`lightness of palette color ${i + 1}`"
+                @input="onSlideL(i, $event)"
+              />
+            </div>
           </div>
         </div>
 
@@ -263,24 +339,34 @@ const fixChartOption = computed(() => {
               :class="{ bad: !bgRgb }"
               spellcheck="false"
               aria-label="background color hex"
+              @input="bgIndex = null"
               @change="normalize('bg')"
             />
           </div>
           <div class="ws-pick">
             <button
-              v-for="(s, i) in workspace.colors"
+              v-for="(c, i) in review.colors"
               :key="'bg' + i"
               type="button"
               class="ws-sw"
-              :style="{ background: s.hex }"
-              :title="`set background to ${s.hex}`"
-              @click="bg = s.hex.toUpperCase()"
+              :class="{ active: bgIndex === i }"
+              :style="{ background: c }"
+              :title="`set background to ${c}`"
+              @click="pickBg(i)"
             />
           </div>
         </div>
 
         <div class="actions">
           <button type="button" class="btn" @click="swap">⇄ Swap</button>
+          <button
+            type="button"
+            class="btn"
+            title="re-seed the review palette from the workspace"
+            @click="reloadPalette"
+          >
+            ↻ Reload
+          </button>
           <button type="button" class="btn" :disabled="!valid" @click="syncToWorkspace">
             ↑ Sync to workspace
           </button>
@@ -464,6 +550,14 @@ const fixChartOption = computed(() => {
   gap: 4px;
 }
 
+.ws-cell {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .ws-sw {
   width: 100%;
   height: 16px;
@@ -477,8 +571,27 @@ const fixChartOption = computed(() => {
   border-color: var(--accent-line);
 }
 
+/* The swatch currently mirrored by fg / bg. */
+.ws-sw.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Per-swatch lightness slider — sweeps the review color's OkLCH L,
+   holding chroma + hue. The fg and bg rows show the slider for the
+   same review slot, so they track each other. */
+.l-slider {
+  width: 100%;
+  height: 12px;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

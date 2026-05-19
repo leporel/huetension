@@ -311,7 +311,7 @@ func TestImageExtractRedirectCap(t *testing.T) {
 
 // TestSSRFBlockRejectsLoopback pins the BlockPrivateNetworks dial control:
 // even a perfectly fine httptest server on 127.0.0.1 must be refused when
-// the sandbox is asked to refuse private networks. Closes the slice D gap.
+// the sandbox is asked to refuse private networks.
 func TestSSRFBlockRejectsLoopback(t *testing.T) {
 	_, data := makeTinyPNG(t, "")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

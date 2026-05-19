@@ -9,7 +9,7 @@
 
 export const SCHEMA_VERSION = 'huetension/v1' as const;
 
-/** Per-color source coordinate from an extracted palette (S2). */
+/** Per-color source coordinate from an extracted palette. */
 export interface Source {
   x: number;
   y: number;
@@ -22,6 +22,7 @@ export interface Source {
  * - `rgb`: 0..255 channels (no alpha — opaque colors only)
  * - `rgba`: present only when alpha != 255
  * - `hsl`: [h°, s%, l%] (0..360, 0..100, 0..100)
+ * - `hsv`: [h°, s%, v%] (0..360, 0..100, 0..100)
  * - `oklch`: [L%, C%, h°] (0..100, 0..100, 0..360)
  * - `freq`: 0..1 fraction, present only for extracted palettes
  * - `source`: pixel-space origin (0..1, normalised), present only for extracted palettes
@@ -31,6 +32,7 @@ export interface ColorJSON {
   rgb: [number, number, number];
   rgba?: [number, number, number, number];
   hsl: [number, number, number];
+  hsv: [number, number, number];
   oklch: [number, number, number];
   freq?: number;
   source?: Source;
@@ -122,11 +124,14 @@ export interface BlindnessResult {
   variants: BlindnessVariant[];
 }
 
-/** `export.css` / `export.tailwind` result — handlers.go::exportResult. */
+/** `POST /export` result — handlers.go::exportResult. For binary formats
+ *  (png/jpeg) `content` is base64 and `encoding` is "base64"; text
+ *  formats carry raw content and omit `encoding`. */
 export interface ExportResult {
   format: string;
   kind?: string;
   content: string;
+  encoding?: string;
   filename: string;
 }
 

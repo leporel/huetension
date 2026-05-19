@@ -2,20 +2,19 @@ package mcp
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"log/slog"
 	"os"
-	"strings"
 	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/leporel/huetension/internal/httputil"
 )
 
 // resolveLogger returns the *slog.Logger to use for this server. When the
 // caller pre-set cfg.Logger (tests, embedding hosts), that instance is
-// returned verbatim — same handler, same destination. Otherwise we build
-// a JSON logger writing to stderr at the level named by cfg.LogLevel.
+// returned verbatim. Otherwise httputil.NewLogger builds one writing to
+// stderr in cfg.LogFormat at cfg.LogLevel.
 //
 // Stderr is deliberate: the stdio transport speaks JSON-RPC on stdout, so
 // any log byte on stdout would corrupt the wire. Anything we own writes
@@ -24,32 +23,7 @@ func resolveLogger(cfg Config) (*slog.Logger, error) {
 	if cfg.Logger != nil {
 		return cfg.Logger, nil
 	}
-	level, err := parseLogLevel(cfg.LogLevel)
-	if err != nil {
-		return nil, err
-	}
-	return newJSONLogger(os.Stderr, level), nil
-}
-
-func newJSONLogger(w io.Writer, level slog.Level) *slog.Logger {
-	return slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{Level: level}))
-}
-
-// parseLogLevel maps a CLI-friendly level name to a slog.Level. Empty or
-// unset defaults to info — the safest middle ground for an LLM-driven
-// server that may run unattended.
-func parseLogLevel(s string) (slog.Level, error) {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "", "info":
-		return slog.LevelInfo, nil
-	case "debug":
-		return slog.LevelDebug, nil
-	case "warn", "warning":
-		return slog.LevelWarn, nil
-	case "error":
-		return slog.LevelError, nil
-	}
-	return 0, fmt.Errorf("mcp: unknown log level %q (want debug|info|warn|error)", s)
+	return httputil.NewLogger(os.Stderr, cfg.LogFormat, cfg.LogLevel)
 }
 
 // loggingMiddleware logs every receiving method dispatch as a single info

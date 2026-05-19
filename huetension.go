@@ -67,7 +67,7 @@ var (
 type (
 	ExtractMethod  = extract.Method
 	ExtractOptions = extract.Options
-	// SoftPreset is a Kuler-like mood preset for the Soft/SoftK methods.
+	// SoftPreset is a mood preset for the Soft/SoftK methods.
 	SoftPreset = extract.SoftPreset
 )
 
@@ -131,6 +131,7 @@ const (
 	HarmonyTetradic            = harmony.Tetradic
 	HarmonySquare              = harmony.Square
 	HarmonyDoubleComplementary = harmony.DoubleComplementary
+	HarmonyCompound            = harmony.Compound
 	HarmonyMonochromatic       = harmony.Monochromatic
 	HarmonyShades              = harmony.Shades
 )
@@ -207,6 +208,8 @@ const (
 	FormatTailwind = exporter.FormatTailwind
 	FormatPlain    = exporter.FormatPlain
 	FormatGPL      = exporter.FormatGPL
+	FormatGGR      = exporter.FormatGGR
+	FormatSVG      = exporter.FormatSVG
 	FormatPNG      = exporter.FormatPNG
 	FormatJPEG     = exporter.FormatJPEG
 )

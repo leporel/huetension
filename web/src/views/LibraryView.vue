@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import CardFrame from '../components/CardFrame.vue';
 import PaletteLibrary from '../components/PaletteLibrary.vue';
+import SaveToLibrary from '../components/SaveToLibrary.vue';
 
 // `/library/:id` deep-links a palette; `/library` leaves it unselected.
 const route = useRoute();
@@ -14,6 +15,9 @@ const selectedId = computed(() => {
 
 <template>
   <div class="grid">
+    <CardFrame title="Save to library" sub="add the current palette" class="span-full">
+      <SaveToLibrary />
+    </CardFrame>
     <CardFrame title="Palette library" sub="curated catalogue" class="span-full">
       <PaletteLibrary :selected-id="selectedId" />
     </CardFrame>

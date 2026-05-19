@@ -4,12 +4,6 @@
 // The package is namespaced as huemcp when imported by the CLI so it does
 // not collide with the SDK's own "mcp" package — internally we alias the
 // SDK as `sdk` so call sites read like `sdk.NewServer(...)`.
-//
-// Slices A–C wired the read-only color/palette/export tools. Slice D adds
-// image.extract / image.extractBatch behind a sandbox (ReadOnly, Root,
-// AllowHosts, MaxImageBytes) configured via Config. Slice F.1+F.2 adds
-// MCP resources and prompts plus a namespaced --enable/--disable syntax
-// that selects across kinds.
 package mcp
 
 import (
@@ -44,7 +38,6 @@ func simple(f func(*sdk.Server)) func(*sdk.Server, tools.Deps) {
 }
 
 // allDescriptors is the canonical tool catalogue. New tools are added here
-// as later slices implement them.
 var allDescriptors = []Descriptor{
 	{
 		Name:           "color.convert",
@@ -60,7 +53,7 @@ var allDescriptors = []Descriptor{
 	},
 	{
 		Name:           "harmony.generate",
-		Description:    "Generate a color harmony (complementary, analogous, triadic, split, tetradic/square, double-complementary, monochromatic, shades) around a base color.",
+		Description:    "Generate a color harmony (complementary, analogous, triadic, split, tetradic/square, double-complementary, compound, monochromatic, shades) around a base color.",
 		DefaultEnabled: true,
 		register:       simple(tools.RegisterHarmonyGenerate),
 	},
@@ -130,12 +123,29 @@ var allDescriptors = []Descriptor{
 		DefaultEnabled: true,
 		register:       tools.RegisterLibraryGet,
 	},
+	{
+		Name:           "library.save",
+		Description:    "Save a palette to the on-disk library so it joins the catalogue (filed under the \"Saved\" category). The server generates the id. Disabled on a read-only server or one with no data directory.",
+		DefaultEnabled: true,
+		register:       tools.RegisterLibrarySave,
+	},
 }
 
 // All returns a copy of the catalogue. Useful for `--list-tools` and tests.
 func All() []Descriptor {
 	out := make([]Descriptor, len(allDescriptors))
 	copy(out, allDescriptors)
+	return out
+}
+
+// enabledToolNames returns the registered tool names in catalogue order —
+// used by the HTTP/SSE startup log so operators can see, at a glance,
+// which tools the server is exposing.
+func enabledToolNames(enabled []Descriptor) []string {
+	out := make([]string, len(enabled))
+	for i, d := range enabled {
+		out[i] = d.Name
+	}
 	return out
 }
 
@@ -204,15 +214,19 @@ type Config struct {
 	// disables CORS handling entirely.
 	CORSOrigins []string
 
-	// LogLevel selects verbosity for the default JSON logger built when
-	// Logger is nil. Accepted values: "debug", "info", "warn", "error".
-	// Empty defaults to "info". Ignored when Logger is set explicitly.
+	// LogLevel selects verbosity for the default logger built when Logger
+	// is nil. Accepted values: "debug", "info", "warn", "error". Empty
+	// defaults to "info". Ignored when Logger is set explicitly.
 	LogLevel string
 
+	// LogFormat selects the default logger's handler: "text" (default,
+	// human-readable) or "json". Ignored when Logger is set explicitly.
+	LogFormat string
+
 	// Logger overrides the default logger. When nil, Build constructs a
-	// JSON logger writing to stderr at LogLevel. Tests and embedding hosts
-	// can pass their own logger to capture or re-route output. Stdio
-	// servers must avoid stdout — JSON-RPC owns it.
+	// logger writing to stderr in LogFormat at LogLevel. Tests and
+	// embedding hosts can pass their own logger to capture or re-route
+	// output. Stdio servers must avoid stdout — JSON-RPC owns it.
 	Logger *slog.Logger
 
 	// Library is the curated palette catalogue served by library.* tools.
@@ -221,6 +235,12 @@ type Config struct {
 	// listing reflects the canonical surface. The CLI loads this via
 	// library.Load(externalPath) and threads it in.
 	Library *library.Index
+
+	// LibraryPath is the on-disk library.json the library.save tool
+	// persists to. Empty disables saving (library.save returns an error);
+	// the other library.* tools are read-only and ignore it. A read-only
+	// server also refuses saves, regardless of this path.
+	LibraryPath string
 }
 
 // kind labels a selector entry. Bare names (no prefix) are kindTool for

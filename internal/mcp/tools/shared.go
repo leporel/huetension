@@ -13,22 +13,23 @@ import (
 // responses; if exporter's encoding evolves, this should follow.
 //
 // TODO: lift exporter's encoding helpers up so MCP and CLI share one
-// implementation. Tracked in slice C/D follow-up.
+// implementation.
 type PaletteResult struct {
-	Size     int                `json:"size" jsonschema:"number of colors in the palette"`
-	Name     string             `json:"name,omitempty" jsonschema:"optional palette name"`
-	Colors   []ColorEntry       `json:"colors" jsonschema:"colors in the palette in canonical order"`
-	Metadata *palette.Metadata  `json:"metadata,omitempty" jsonschema:"provenance metadata recorded by the producer"`
+	Size     int               `json:"size" jsonschema:"number of colors in the palette"`
+	Name     string            `json:"name,omitempty" jsonschema:"optional palette name"`
+	Colors   []ColorEntry      `json:"colors" jsonschema:"colors in the palette in canonical order"`
+	Metadata *palette.Metadata `json:"metadata,omitempty" jsonschema:"provenance metadata recorded by the producer"`
 }
 
 // ColorEntry is one row of a palette in JSON. Matches exporter.ColorJSON:
-// hex, integer rgb triple, percentage HSL, percentage OkLCH, optional freq,
-// and (when produced by image.extract) the normalised pin coordinate the
-// Web UI's Kuler-style overlay uses to place draggable color picks.
+// hex, integer rgb triple, percentage HSL/HSV, percentage OkLCH, optional
+// freq, and (when produced by image.extract) the normalised pin coordinate
+// the Web UI's pin overlay uses to place draggable color picks.
 type ColorEntry struct {
 	Hex    string        `json:"hex" jsonschema:"canonical hex (#rrggbb)"`
 	RGB    [3]uint8      `json:"rgb" jsonschema:"sRGB 8-bit channels"`
 	HSL    [3]int        `json:"hsl" jsonschema:"HSL [hue °, saturation %, lightness %]"`
+	HSV    [3]int        `json:"hsv" jsonschema:"HSV [hue °, saturation %, value %]"`
 	OkLCH  [3]int        `json:"oklch" jsonschema:"OkLCH [lightness %, chroma %, hue °]"`
 	Freq   float64       `json:"freq,omitempty" jsonschema:"frequency 0..1, populated for extracted palettes"`
 	Source *color.Source `json:"source,omitempty" jsonschema:"normalised (0..1) representative-pixel coordinate; populated only for image.extract output"`
@@ -62,11 +63,13 @@ func encodeColors(in []color.Color) []ColorEntry {
 
 func encodeColor(c color.Color) ColorEntry {
 	h, s, l := c.ToHSL()
+	hh, ss, v := c.ToHSV()
 	okL, okC, okH := c.ToOkLCH()
 	return ColorEntry{
 		Hex:    c.Hex(),
 		RGB:    [3]uint8{c.R, c.G, c.B},
 		HSL:    [3]int{roundDeg(h), pct(s), pct(l)},
+		HSV:    [3]int{roundDeg(hh), pct(ss), pct(v)},
 		OkLCH:  [3]int{pct(okL), pct(okC), roundDeg(okH)},
 		Freq:   c.Freq,
 		Source: c.Source,

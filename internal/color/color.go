@@ -32,7 +32,7 @@ type Source struct {
 // A is 255 for opaque colors; Freq is optional metadata (0..1) attached by
 // palette extractors and is ignored by parsers, formatters, and conversions.
 // Source is an optional pin coordinate attached by image extraction so the
-// Web UI can show a Kuler-style pin on the source image; nil for non-image
+// Web UI can show a draggable pin on the source image; nil for non-image
 // colors. Palette operations (sort / harmony / gradient) pass Source
 // through unchanged via struct copy — the pointer travels with its color.
 type Color struct {

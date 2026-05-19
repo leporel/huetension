@@ -1,25 +1,39 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { watchDebounced } from '@vueuse/core';
 import VChart from 'vue-echarts';
 import { gradient } from '../api';
-import type { ColorJSON } from '../api/types';
+import type { ColorJSON, PaletteEnvelope } from '../api/types';
 import type { GradientEasing, GradientSpace } from '../api/gradient';
 import { useWorkspaceStore } from '../stores/workspace';
-import { fromHex, luminance, toHex, toOkLab, type RGB } from '../composables/useColor';
+import { fromHex, toHex, toOkLab, type RGB } from '../composables/useColor';
 import { useChartTheme } from '../composables/useChartTheme';
+import {
+  CSS_INTERP,
+  gradientToCSS,
+  gradientToGGR,
+  gradientToJSON,
+  gradientToSVG,
+  safeIdent,
+  type GradientArtifact,
+} from '../composables/gradientExport';
 
 /**
- * Multi-stop gradient studio. Stops are evenly distributed — that's the
- * only spacing `gradient.MultiStop` honours on the backend, so an
- * arbitrary-position editor would desync the preview from the discrete
- * output. The CSS bar is the live visual; the discrete N-step palette
- * comes from /api/v1/gradient (debounced) so it byte-matches the CLI;
- * the ECharts line plots OkLab lightness of those steps — the "is this
- * ramp perceptually even" diagnostic.
+ * Multi-stop gradient studio. Each stop carries a 0..1 position; the two
+ * endpoints stay pinned at 0 and 1, middle stops drag along the bar.
+ * `gradient.MultiStopAt` honours those positions on the backend. The CSS
+ * bar is the instant preview — it interpolates via `linear-gradient(in
+ * <space> …)`, the same space the backend uses, so the colors agree; it
+ * cannot show the easing curve, though (CSS gradients interpolate
+ * linearly between stops). The discrete N-step palette comes from
+ * /api/v1/gradient (debounced) and is authoritative — it honours both
+ * positions and easing and byte-matches the CLI; the ECharts line plots
+ * OkLab lightness of those steps — the "is this ramp perceptually even"
+ * diagnostic.
  *
- * "Extract Gradient" reseeds the stops from the two extreme-luminance
- * colors in the workspace palette (plan §5).
+ * The stops are seeded from the whole workspace palette, so the card
+ * opens with the palette already shown as an editable gradient; the
+ * "Extract Gradient" button re-syncs them to the current palette.
  */
 
 const workspace = useWorkspaceStore();
@@ -29,42 +43,53 @@ const SPACES: GradientSpace[] = ['oklch', 'oklab', 'lab', 'hsl', 'rgb'];
 const EASINGS: GradientEasing[] = ['linear', 'ease-in', 'ease-out', 'ease-in-out'];
 const MAX_STEPS = 16;
 
-/** Darkest + lightest workspace colors by WCAG luminance. */
-function extremes(): string[] {
-  const cs = workspace.colors;
-  if (cs.length === 0) return ['#1A1A1A', '#FFFFFF'];
-  let loHex = cs[0]!.hex;
-  let hiHex = cs[0]!.hex;
-  let loL = Infinity;
-  let hiL = -Infinity;
-  for (const s of cs) {
-    let L: number;
-    try {
-      L = luminance(fromHex(s.hex));
-    } catch {
-      continue;
-    }
-    if (L < loL) {
-      loL = L;
-      loHex = s.hex;
-    }
-    if (L > hiL) {
-      hiL = L;
-      hiHex = s.hex;
-    }
+// css/ggr/svg/json render client-side off the discrete result; png/jpeg
+// need the Go image renderer, so they route through POST /export.
+type ExportFormat = 'css' | 'ggr' | 'svg' | 'json' | 'png' | 'jpeg';
+const EXPORT_FORMATS: { value: ExportFormat; label: string }[] = [
+  { value: 'css', label: 'CSS' },
+  { value: 'ggr', label: 'GIMP' },
+  { value: 'svg', label: 'SVG' },
+  { value: 'json', label: 'JSON' },
+  { value: 'png', label: 'PNG' },
+  { value: 'jpeg', label: 'JPEG' },
+];
+
+/**
+ * The workspace palette as gradient stops — every color in palette
+ * order, capped at MAX_STEPS. A degenerate 0/1-color palette falls back
+ * to a dark→light pair so there are always at least 2 stops.
+ */
+function paletteStops(): string[] {
+  const hexes = workspace.colors.map((c) => c.hex.toUpperCase());
+  if (hexes.length === 0) return ['#1A1A1A', '#FFFFFF'];
+  if (hexes.length === 1) {
+    return [hexes[0]!, hexes[0] === '#FFFFFF' ? '#1A1A1A' : '#FFFFFF'];
   }
-  // Single-color or all-equal palette → still need 2 distinct stops.
-  if (loHex === hiHex) return [loHex.toUpperCase(), '#FFFFFF'];
-  return [loHex.toUpperCase(), hiHex.toUpperCase()];
+  return hexes.slice(0, MAX_STEPS);
 }
 
-const stops = ref<string[]>(extremes());
+/** n positions evenly spread across [0,1], endpoints pinned to 0 and 1. */
+function evenPositions(n: number): number[] {
+  if (n < 2) return n === 1 ? [0] : [];
+  return Array.from({ length: n }, (_, i) => (i === n - 1 ? 1 : i / (n - 1)));
+}
+
+const stops = ref<string[]>(paletteStops());
+/** Per-stop 0..1 position, parallel to `stops`; index 0 = 0, last = 1. */
+const positions = ref<number[]>(evenPositions(stops.value.length));
 const selected = ref(0);
 const steps = ref(7);
 const space = ref<GradientSpace>('oklch');
 const easing = ref<GradientEasing>('linear');
 
-const result = ref<ColorJSON[]>([]);
+/** Smallest gap kept between adjacent stop positions while dragging. */
+const MIN_GAP = 0.01;
+
+// Full /api/v1/gradient envelope-result kept for the JSON export; the
+// discrete colors the UI renders are derived from it.
+const lastResult = ref<PaletteEnvelope['result'] | null>(null);
+const result = computed<ColorJSON[]>(() => lastResult.value?.palette.colors ?? []);
 const loading = ref(false);
 const errorMsg = ref<string | null>(null);
 
@@ -72,13 +97,15 @@ const errorMsg = ref<string | null>(null);
 const minSteps = computed(() => stops.value.length);
 const effectiveSteps = computed(() => Math.max(steps.value, minSteps.value));
 
-const barGradient = computed(
-  () => `linear-gradient(90deg, ${stops.value.join(', ')})`,
-);
+const barGradient = computed(() => {
+  const parts = stops.value.map(
+    (s, i) => `${s} ${((positions.value[i] ?? 0) * 100).toFixed(2)}%`,
+  );
+  return `linear-gradient(in ${CSS_INTERP[space.value]} 90deg, ${parts.join(', ')})`;
+});
 
 function stopLeft(i: number): string {
-  const n = stops.value.length;
-  return n > 1 ? `${(i / (n - 1)) * 100}%` : '50%';
+  return `${(positions.value[i] ?? 0) * 100}%`;
 }
 
 function parse(hex: string): RGB | null {
@@ -114,23 +141,77 @@ function setSelectedTo(hex: string): void {
 }
 
 function addStop(): void {
-  const next = [...stops.value, '#888888'];
-  stops.value = next;
-  if (steps.value < next.length) steps.value = next.length;
-  selectStop(next.length - 1);
+  // Drop the new stop into the widest gap so it lands somewhere useful.
+  let gapIdx = 0;
+  let gapSize = -1;
+  for (let i = 0; i < positions.value.length - 1; i++) {
+    const g = (positions.value[i + 1] ?? 1) - (positions.value[i] ?? 0);
+    if (g > gapSize) {
+      gapSize = g;
+      gapIdx = i;
+    }
+  }
+  const mid =
+    ((positions.value[gapIdx] ?? 0) + (positions.value[gapIdx + 1] ?? 1)) / 2;
+  const nextStops = [...stops.value];
+  const nextPositions = [...positions.value];
+  nextStops.splice(gapIdx + 1, 0, '#888888');
+  nextPositions.splice(gapIdx + 1, 0, mid);
+  stops.value = nextStops;
+  positions.value = nextPositions;
+  if (steps.value < nextStops.length) steps.value = nextStops.length;
+  selectStop(gapIdx + 1);
 }
 
 function removeStop(i: number): void {
   if (stops.value.length <= 2) return;
   stops.value = stops.value.filter((_, idx) => idx !== i);
+  const nextPositions = positions.value.filter((_, idx) => idx !== i);
+  // Removing an endpoint moves the 0/1 pin onto its surviving neighbour.
+  nextPositions[0] = 0;
+  nextPositions[nextPositions.length - 1] = 1;
+  positions.value = nextPositions;
   selectStop(Math.min(selected.value, stops.value.length - 1));
 }
 
 function extractFromWorkspace(): void {
-  const next = extremes();
+  const next = paletteStops();
   stops.value = next;
+  positions.value = evenPositions(next.length);
   if (steps.value < next.length) steps.value = next.length;
   selectStop(0);
+}
+
+// --- stop dragging -----------------------------------------------------
+
+const barEl = ref<HTMLElement | null>(null);
+// -1 when idle; otherwise the index of the stop being dragged.
+let dragIndex = -1;
+
+/** Begin a drag (and select the stop). Endpoints stay pinned, not draggable. */
+function startDrag(i: number, e: PointerEvent): void {
+  selectStop(i);
+  if (i === 0 || i === stops.value.length - 1) return;
+  dragIndex = i;
+  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+}
+
+/** Move the dragged stop, clamped between its neighbours. */
+function onDrag(e: PointerEvent): void {
+  if (dragIndex < 0 || !barEl.value) return;
+  const rect = barEl.value.getBoundingClientRect();
+  if (rect.width === 0) return;
+  const raw = (e.clientX - rect.left) / rect.width;
+  const lo = (positions.value[dragIndex - 1] ?? 0) + MIN_GAP;
+  const hi = (positions.value[dragIndex + 1] ?? 1) - MIN_GAP;
+  const clamped = Math.min(hi, Math.max(lo, raw));
+  positions.value = positions.value.map((v, idx) =>
+    idx === dragIndex ? clamped : v,
+  );
+}
+
+function endDrag(): void {
+  dragIndex = -1;
 }
 
 // --- backend fetch -----------------------------------------------------
@@ -139,22 +220,22 @@ async function fetchGradient(): Promise<void> {
   loading.value = true;
   errorMsg.value = null;
   try {
-    const res = await gradient.generate({
+    lastResult.value = await gradient.generate({
       stops: stops.value.join(','),
+      positions: positions.value.map((p) => p.toFixed(4)).join(','),
       steps: effectiveSteps.value,
       space: space.value,
       easing: easing.value,
     });
-    result.value = res.palette.colors;
   } catch (e) {
     errorMsg.value = e instanceof Error ? e.message : String(e);
-    result.value = [];
+    lastResult.value = null;
   } finally {
     loading.value = false;
   }
 }
 
-watchDebounced([stops, steps, space, easing], fetchGradient, {
+watchDebounced([stops, positions, steps, space, easing], fetchGradient, {
   debounce: 220,
   deep: true,
   immediate: true,
@@ -215,6 +296,158 @@ const chartOption = computed(() => {
     ],
   };
 });
+
+// --- export ------------------------------------------------------------
+
+const exportFormat = ref<ExportFormat>('css');
+const exportName = ref('gradient');
+const copied = ref(false);
+
+/** Request params echoed into the JSON export envelope. */
+const exportParams = computed<Record<string, unknown>>(() => ({
+  stops: stops.value.join(','),
+  positions: positions.value.map((p) => p.toFixed(4)).join(','),
+  steps: effectiveSteps.value,
+  space: space.value,
+  easing: easing.value,
+}));
+
+/**
+ * Copy / download artifact for the chosen format. CSS builds from the
+ * stops directly; GIMP / SVG / JSON need the discrete result and stay
+ * null until the first /api/v1/gradient response lands.
+ */
+const exportArtifact = computed<GradientArtifact | null>(() => {
+  const name = exportName.value;
+  switch (exportFormat.value) {
+    case 'css':
+      return gradientToCSS(stops.value, positions.value, space.value, name);
+    case 'ggr':
+      return result.value.length > 1 ? gradientToGGR(result.value, name) : null;
+    case 'svg':
+      return result.value.length > 1 ? gradientToSVG(result.value, name) : null;
+    case 'json':
+      return lastResult.value
+        ? gradientToJSON(lastResult.value, exportParams.value, name)
+        : null;
+    default:
+      return null;
+  }
+});
+
+// png / jpeg: a true gradient image, rasterised on a <canvas>. The Go
+// exporter's PNG/JPEG draws a discrete swatch strip — right for a
+// palette, wrong for a gradient — so the binary export is done
+// client-side here instead of through POST /export.
+const isBinaryExport = computed(
+  () => exportFormat.value === 'png' || exportFormat.value === 'jpeg',
+);
+const binaryUrl = ref<string | null>(null);
+
+const canExport = computed(() =>
+  isBinaryExport.value ? binaryUrl.value !== null : exportArtifact.value !== null,
+);
+
+// A fine sample count so the rasterised gradient looks smooth and
+// honours the chosen space / easing / positions; the canvas tweens
+// sRGB between these already-correct samples, imperceptibly at this
+// density. The UI's MAX_STEPS cap is a slider concern, not a wire one.
+const GRADIENT_IMAGE_STEPS = 256;
+const GRADIENT_IMAGE_W = 720;
+const GRADIENT_IMAGE_H = 120;
+
+/** Swap in a new binary preview URL, revoking the previous one. */
+function setBinaryUrl(blob: Blob | null): void {
+  if (binaryUrl.value) URL.revokeObjectURL(binaryUrl.value);
+  binaryUrl.value = blob ? URL.createObjectURL(blob) : null;
+}
+
+/** Paint `hexes` as a horizontal linear gradient and encode it to `mime`. */
+function renderGradientImage(hexes: string[], mime: string): Promise<Blob> {
+  const canvas = document.createElement('canvas');
+  canvas.width = GRADIENT_IMAGE_W;
+  canvas.height = GRADIENT_IMAGE_H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return Promise.reject(new Error('canvas 2d context unavailable'));
+  const grad = ctx.createLinearGradient(0, 0, GRADIENT_IMAGE_W, 0);
+  hexes.forEach((hex, i) =>
+    grad.addColorStop(hexes.length > 1 ? i / (hexes.length - 1) : 0, hex),
+  );
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, GRADIENT_IMAGE_W, GRADIENT_IMAGE_H);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error('canvas encode failed'))),
+      mime,
+      0.95,
+    );
+  });
+}
+
+async function fetchBinaryExport(): Promise<void> {
+  if (!isBinaryExport.value || stops.value.length < 2) {
+    setBinaryUrl(null);
+    return;
+  }
+  try {
+    // Sample the gradient finely — /api/v1/gradient honours space,
+    // easing and stop positions; the colors come back already blended.
+    const res = await gradient.generate({
+      stops: stops.value.join(','),
+      positions: positions.value.map((p) => p.toFixed(4)).join(','),
+      steps: GRADIENT_IMAGE_STEPS,
+      space: space.value,
+      easing: easing.value,
+    });
+    const mime = exportFormat.value === 'png' ? 'image/png' : 'image/jpeg';
+    setBinaryUrl(
+      await renderGradientImage(res.palette.colors.map((c) => c.hex), mime),
+    );
+  } catch (e) {
+    errorMsg.value = e instanceof Error ? e.message : String(e);
+    setBinaryUrl(null);
+  }
+}
+
+watchDebounced([exportFormat, stops, positions, space, easing], fetchBinaryExport, {
+  debounce: 220,
+  deep: true,
+});
+onBeforeUnmount(() => setBinaryUrl(null));
+
+async function copyExport(): Promise<void> {
+  const art = exportArtifact.value;
+  if (!art) return;
+  try {
+    await navigator.clipboard.writeText(art.text);
+    copied.value = true;
+    window.setTimeout(() => {
+      copied.value = false;
+    }, 1200);
+  } catch {
+    errorMsg.value = 'clipboard unavailable';
+  }
+}
+
+function downloadExport(): void {
+  if (isBinaryExport.value) {
+    if (!binaryUrl.value) return;
+    const a = document.createElement('a');
+    a.href = binaryUrl.value;
+    a.download = `${safeIdent(exportName.value)}.${exportFormat.value === 'png' ? 'png' : 'jpg'}`;
+    a.click();
+    return;
+  }
+  const art = exportArtifact.value;
+  if (!art) return;
+  const blob = new Blob([art.text], { type: `${art.mime};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${safeIdent(exportName.value)}.${art.ext}`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 </script>
 
 <template>
@@ -226,16 +459,19 @@ const chartOption = computed(() => {
       <span class="hint mono">{{ effectiveSteps }} steps · {{ space }} · {{ easing }}</span>
     </div>
 
-    <div class="bar" :style="{ background: barGradient }">
+    <div ref="barEl" class="bar" :style="{ background: barGradient }">
       <button
         v-for="(s, i) in stops"
         :key="i"
         type="button"
         class="grad-stop"
-        :class="{ sel: i === selected }"
+        :class="{ sel: i === selected, fixed: i === 0 || i === stops.length - 1 }"
         :style="{ left: stopLeft(i), background: s }"
-        :title="`stop ${i + 1}: ${s}`"
-        @click="selectStop(i)"
+        :title="`stop ${i + 1}: ${s} @ ${Math.round((positions[i] ?? 0) * 100)}%`"
+        @pointerdown="startDrag(i, $event)"
+        @pointermove="onDrag($event)"
+        @pointerup="endDrag"
+        @lostpointercapture="endDrag"
       />
     </div>
 
@@ -339,6 +575,63 @@ const chartOption = computed(() => {
         </div>
       </div>
     </div>
+
+    <div class="export">
+      <div class="export-head">
+        <span class="fld">Export</span>
+        <div class="fmt-row" role="group" aria-label="Export format">
+          <button
+            v-for="f in EXPORT_FORMATS"
+            :key="f.value"
+            type="button"
+            class="fmt-btn"
+            :class="{ active: exportFormat === f.value }"
+            :aria-pressed="exportFormat === f.value"
+            @click="exportFormat = f.value"
+          >
+            {{ f.label }}
+          </button>
+        </div>
+      </div>
+      <input
+        v-model="exportName"
+        class="export-name mono"
+        type="text"
+        spellcheck="false"
+        autocomplete="off"
+        placeholder="gradient"
+        aria-label="export name"
+      />
+      <img
+        v-if="isBinaryExport"
+        class="export-thumb"
+        :class="{ placeholder: !binaryUrl }"
+        :src="binaryUrl ?? ''"
+        alt="gradient export preview"
+      />
+      <pre v-else class="export-out mono" :class="{ placeholder: !exportArtifact }">{{
+        exportArtifact ? exportArtifact.text : loading ? 'computing…' : 'no gradient'
+      }}</pre>
+      <div class="export-actions">
+        <button
+          v-if="!isBinaryExport"
+          type="button"
+          class="btn"
+          :disabled="!canExport"
+          @click="copyExport"
+        >
+          {{ copied ? 'Copied!' : 'Copy' }}
+        </button>
+        <button
+          type="button"
+          class="btn"
+          :disabled="!canExport"
+          @click="downloadExport"
+        >
+          Download
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -372,9 +665,14 @@ const chartOption = computed(() => {
   cursor: pointer;
 }
 
-.btn:hover {
+.btn:hover:not(:disabled) {
   border-color: var(--accent-line);
   color: var(--fg-0);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .btn.accent {
@@ -400,7 +698,17 @@ const chartOption = computed(() => {
   border-radius: 50%;
   border: 2px solid #fff;
   box-shadow: 0 0 0 1px oklch(0 0 0 / 0.5);
+  cursor: grab;
+  touch-action: none;
+}
+
+/* Endpoints stay pinned at 0 / 1 — clickable to select, not draggable. */
+.grad-stop.fixed {
   cursor: pointer;
+}
+
+.grad-stop:not(.fixed):active {
+  cursor: grabbing;
 }
 
 .grad-stop.sel {
@@ -628,5 +936,107 @@ const chartOption = computed(() => {
 .out-hex {
   font-size: 8.5px;
   color: var(--fg-2);
+}
+
+.export {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.export-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fmt-row {
+  display: inline-flex;
+  margin-left: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-2);
+}
+
+.fmt-btn {
+  padding: 5px 10px;
+  font-size: 10.5px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--fg-2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.fmt-btn + .fmt-btn {
+  border-left: 1px solid var(--line-soft);
+}
+
+.fmt-btn:hover {
+  color: var(--fg-0);
+}
+
+.fmt-btn.active {
+  background: var(--accent-soft);
+  color: var(--fg-0);
+}
+
+.export-name {
+  background: var(--bg-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  padding: 6px 8px;
+  color: var(--fg-0);
+  font-size: 11.5px;
+}
+
+.export-name:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.export-out {
+  margin: 0;
+  height: 130px;
+  overflow: auto;
+  padding: 9px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--fg-1);
+  white-space: pre;
+  tab-size: 2;
+}
+
+.export-out.placeholder {
+  color: var(--fg-3);
+}
+
+.export-thumb {
+  height: 130px;
+  width: 100%;
+  object-fit: contain;
+  padding: 9px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  image-rendering: pixelated;
+}
+
+.export-thumb.placeholder {
+  opacity: 0;
+}
+
+.export-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.export-actions .btn {
+  flex: 1 1 auto;
 }
 </style>

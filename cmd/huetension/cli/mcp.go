@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	huemcp "github.com/leporel/huetension/internal/mcp"
 )
@@ -19,21 +20,18 @@ import (
 // filesystem access or letting an LLM SSRF the local network through a
 // public-facing MCP server is the obvious mistake to prevent.
 type mcpFlags struct {
-	transports           []string
-	enable               []string
-	disable              []string
-	listTools            bool
-	listFmt              string
-	logLevel             string
-	readOnly             bool
-	root                 string
-	allowHosts           []string
-	maxImageBytes        int64
-	blockPrivateNetworks bool
-	address              string
-	basePath             string
-	authToken            string
-	corsOrigins          []string
+	transports  []string
+	enable      []string
+	disable     []string
+	listTools   bool
+	listFmt     string
+	logLevel    string
+	logFormat   string
+	address     string
+	basePath    string
+	authToken   string
+	corsOrigins []string
+	sandboxFlags
 }
 
 func newMCPCmd() *cobra.Command {
@@ -47,7 +45,9 @@ func newMCPCmd() *cobra.Command {
 			"Transports: stdio (default; child-process MCP for Claude Desktop / editors), http (modern streamable, recommended for remote use), sse (legacy server-sent events). " +
 			"Pass --transport stdio,http or --transport all to run multiple concurrently.\n\n" +
 			"For HTTP/SSE the server refuses to bind a non-loopback address without --auth-token, and ReadOnly + BlockPrivateNetworks default to true. " +
-			"Pin --root, --allow-host, --max-image-bytes when exposing the server beyond localhost.",
+			"Pin --root, --allow-host, --max-image-bytes when exposing the server beyond localhost.\n\n" +
+			"The --enable / --disable tool selectors can also be set in the mcp: section of config.yaml inside --data-dir; " +
+			"a flag passed on the command line overrides the file.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMCP(cmd, &mf)
 		},
@@ -58,15 +58,16 @@ func newMCPCmd() *cobra.Command {
 	cmd.Flags().StringSliceVar(&mf.disable, "disable", nil, "comma-separated blacklist; same namespaced syntax as --enable; applied after --enable")
 	cmd.Flags().BoolVar(&mf.listTools, "list-tools", false, "print the registered tool catalogue and exit")
 	cmd.Flags().StringVar(&mf.listFmt, "list-format", "text", "format for --list-tools output (text|json)")
-	cmd.Flags().StringVar(&mf.logLevel, "log-level", "info", "log level (debug|info|warn|error); JSON-formatted output goes to stderr")
+	cmd.Flags().StringVar(&mf.logLevel, "log-level", "info", "log level (debug|info|warn|error); written to stderr")
+	cmd.Flags().StringVar(&mf.logFormat, "log-format", "text", "log output format: text (human-readable, default) or json")
 
-	cmd.Flags().BoolVar(&mf.readOnly, "read-only", false, "reject image.extract path inputs (URL/data still allowed); auto-on for http/sse transports")
-	cmd.Flags().StringVar(&mf.root, "root", ".", "directory below which image.extract path inputs must resolve; empty disables filesystem access")
-	cmd.Flags().StringSliceVar(&mf.allowHosts, "allow-host", nil, "host allowlist for image.extract URL fetches (e.g. '*.unsplash.com'); empty allows all")
-	cmd.Flags().Int64Var(&mf.maxImageBytes, "max-image-bytes", 0, "cap on image bytes (URL body or decoded base64); 0 → 64 MiB")
-	cmd.Flags().BoolVar(&mf.blockPrivateNetworks, "block-private-networks", false, "refuse outbound connections to loopback/private/link-local IPs in image.extract; auto-on for http/sse transports")
+	bindSandboxFlags(cmd, &mf.sandboxFlags, "image.extract path inputs", "http/sse transports")
 
-	cmd.Flags().StringVar(&mf.address, "address", ":7337", "listen address for http/sse transports")
+	// Loopback default mirrors `huetension web` / `serve`: a no-arg
+	// `--transport http` run must succeed locally without --auth-token.
+	// Exposing the server is an explicit `--address 0.0.0.0:7337` opt-in
+	// (which then makes --auth-token mandatory; see runHTTP's refusal).
+	cmd.Flags().StringVar(&mf.address, "address", "127.0.0.1:7337", "listen address for http/sse transports (e.g. 127.0.0.1:7337 for loopback, 0.0.0.0:7337 for any interface)")
 	cmd.Flags().StringVar(&mf.basePath, "base-path", "/mcp", "URL prefix for the streamable HTTP handler (sse mounts at base-path/sse)")
 	cmd.Flags().StringVar(&mf.authToken, "auth-token", "", "Bearer token required for http/sse requests; mandatory when binding non-loopback")
 	cmd.Flags().StringSliceVar(&mf.corsOrigins, "cors", nil, "Access-Control-Allow-Origin values for http/sse responses ('*' or explicit origins); empty disables CORS")
@@ -125,15 +126,25 @@ func runMCP(cmd *cobra.Command, mf *mcpFlags) error {
 		return err
 	}
 
-	lib, err := loadLibrary(dataDir)
+	// Layer config.yaml's `mcp:` section (and HUETENSION_MCP_* env) under
+	// the explicit --enable / --disable flags: a flag passed on the
+	// command line wins, otherwise the file/env value is used.
+	if err := viper.BindPFlag(cfgKeyMCPEnable, cmd.Flags().Lookup("enable")); err != nil {
+		return err
+	}
+	if err := viper.BindPFlag(cfgKeyMCPDisable, cmd.Flags().Lookup("disable")); err != nil {
+		return err
+	}
+
+	lib, libPath, err := loadLibrary(dataDir)
 	if err != nil {
 		return err
 	}
 
 	cfg := huemcp.Config{
 		Version:              version,
-		Enable:               mf.enable,
-		Disable:              mf.disable,
+		Enable:               viper.GetStringSlice(cfgKeyMCPEnable),
+		Disable:              viper.GetStringSlice(cfgKeyMCPDisable),
 		ReadOnly:             mf.readOnly,
 		Root:                 mf.root,
 		AllowHosts:           mf.allowHosts,
@@ -145,7 +156,9 @@ func runMCP(cmd *cobra.Command, mf *mcpFlags) error {
 		AuthToken:            mf.authToken,
 		CORSOrigins:          mf.corsOrigins,
 		LogLevel:             mf.logLevel,
+		LogFormat:            mf.logFormat,
 		Library:              lib,
+		LibraryPath:          libPath,
 	}
 
 	if mf.listTools {

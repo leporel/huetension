@@ -25,7 +25,11 @@ interface SideItem {
   key: string;
   label: string;
   icon: IconKey;
-  to: string;
+  // `section` items scroll to a card on the Tools page (`?section=<target>`);
+  // `route` items navigate to another route (Library). `target` is the
+  // card id or the route path respectively.
+  kind: 'section' | 'route';
+  target: string;
   count?: number;
 }
 
@@ -41,36 +45,49 @@ const groups = computed<SideGroup[]>(() => [
   {
     label: 'Palette Generator',
     items: [
-      { key: 'harmonies', label: 'Harmonies', icon: 'target', to: '/', count: workspace.size },
-      { key: 'custom', label: 'Custom mix', icon: 'grid', to: '/' },
-      { key: 'image', label: 'From image', icon: 'image', to: '/' },
-      { key: 'gradient', label: 'From gradient', icon: 'gradient', to: '/tools' },
-      { key: 'random', label: 'Random seed', icon: 'shuffle', to: '/' },
+      { key: 'harmonies', label: 'Harmonies', icon: 'target', kind: 'section', target: 'harmony', count: workspace.size },
+      // "Custom mix" → the wheel card: dragging handles is the custom-mix surface.
+      { key: 'custom', label: 'Custom mix', icon: 'grid', kind: 'section', target: 'wheel' },
+      { key: 'image', label: 'From image', icon: 'image', kind: 'section', target: 'from-image' },
+      { key: 'gradient', label: 'From gradient', icon: 'gradient', kind: 'section', target: 'gradient' },
+      // Random has no card of its own — it folds into the Harmony card.
+      { key: 'random', label: 'Random seed', icon: 'shuffle', kind: 'section', target: 'harmony' },
     ],
   },
   {
     label: 'Tools',
     items: [
-      { key: 'picker', label: 'Color picker', icon: 'picker', to: '/' },
-      { key: 'contrast', label: 'Contrast checker', icon: 'contrast', to: '/contrast' },
-      { key: 'converter', label: 'Color converter', icon: 'convert', to: '/tools' },
-      { key: 'blindness', label: 'Color blindness', icon: 'eye', to: '/tools' },
+      { key: 'picker', label: 'Color picker', icon: 'picker', kind: 'section', target: 'color-picker' },
+      { key: 'contrast', label: 'Contrast checker', icon: 'contrast', kind: 'section', target: 'contrast' },
+      { key: 'export', label: 'Export', icon: 'convert', kind: 'section', target: 'export' },
+      { key: 'blindness', label: 'Color blindness', icon: 'eye', kind: 'section', target: 'blindness' },
     ],
   },
   {
     label: 'Library',
     items: [
-      { key: 'browse', label: 'Browse palettes', icon: 'book', to: '/library' },
-      { key: 'categories', label: 'Categories', icon: 'list', to: '/library' },
+      { key: 'browse', label: 'Browse palettes', icon: 'book', kind: 'route', target: '/library' },
+      { key: 'categories', label: 'Categories', icon: 'list', kind: 'route', target: '/library' },
     ],
   },
 ]);
 
+// `section` items deep-link a card on the Tools page; `route` items
+// navigate. The Library group keeps a `?section=` discriminator purely so
+// only one of its two links shows active at a time.
+function linkTarget(item: SideItem) {
+  return item.kind === 'section'
+    ? { path: '/', query: { section: item.target } }
+    : { path: item.target, query: { section: item.key } };
+}
+
 function isActive(item: SideItem): boolean {
-  const tabMatch = route.path === item.to;
-  if (!tabMatch) return false;
-  const m = (route.query.section as string | undefined) ?? '';
-  return m === '' || m === item.key;
+  if (item.kind === 'route') {
+    if (!route.path.startsWith(item.target)) return false;
+    const m = (route.query.section as string | undefined) ?? '';
+    return m === '' || m === item.key;
+  }
+  return route.path === '/' && route.query.section === item.target;
 }
 </script>
 
@@ -81,7 +98,8 @@ function isActive(item: SideItem): boolean {
       <RouterLink
         v-for="item in g.items"
         :key="item.key"
-        :to="{ path: item.to, query: { section: item.key } }"
+        :to="linkTarget(item)"
+        :replace="item.kind === 'section' && route.path === '/'"
         class="side-item"
         :class="{ active: isActive(item) }"
       >
@@ -137,7 +155,7 @@ function isActive(item: SideItem): boolean {
 
     <div class="side-foot">
       <div class="foot-name">huetension web</div>
-      <div class="foot-sub">Phase 3 · S4b shell</div>
+      <div class="foot-sub">Phase 3 · web UI</div>
       <div class="track">
         <span class="fill" />
       </div>
@@ -153,6 +171,16 @@ function isActive(item: SideItem): boolean {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  /* Pin below the 52px sticky topbar while the page scrolls.
+     `align-self: start` stops the grid from stretching the sidebar to
+     full content height — a stretched item has nothing left to stick
+     within. The fixed height + `overflow-y` lets a long nav scroll on
+     its own when it outgrows the viewport. */
+  position: sticky;
+  top: 52px;
+  align-self: start;
+  height: calc(100vh - 52px);
+  overflow-y: auto;
 }
 
 .side-label {

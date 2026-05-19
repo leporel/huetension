@@ -31,7 +31,7 @@ type ImageExtractParams struct {
 	SortBy             string `json:"sort_by,omitempty" jsonschema:"final palette sort: luminance|lightness|okl|hue|saturation|frequency|none"`
 	Reverse            bool   `json:"reverse,omitempty" jsonschema:"reverse the sort order"`
 	AlphaMaskThreshold int    `json:"alpha_mask_threshold,omitempty" jsonschema:"drop pixels with alpha < threshold (0..255)"`
-	SoftPreset         string `json:"soft_preset,omitempty" jsonschema:"soft/softk only: Kuler-like mood preset (default|colorful|bright|muted|deep|dark); drives perceptual filter + ranking. Omit = 'default'."`
+	SoftPreset         string `json:"soft_preset,omitempty" jsonschema:"soft/softk only: mood preset (default|colorful|bright|muted|deep|dark); drives perceptual filter + ranking. Omit = 'default'."`
 }
 
 // ImageExtractOutput wraps a single-image extraction in the huetension/v1
@@ -58,7 +58,7 @@ type ImageExtractBatchParams struct {
 	SortBy             string `json:"sort_by,omitempty" jsonschema:"final palette sort"`
 	Reverse            bool   `json:"reverse,omitempty" jsonschema:"reverse sort order"`
 	AlphaMaskThreshold int    `json:"alpha_mask_threshold,omitempty" jsonschema:"drop low-alpha pixels"`
-	SoftPreset         string `json:"soft_preset,omitempty" jsonschema:"soft/softk only: Kuler-like mood preset (default|colorful|bright|muted|deep|dark). Omit = 'default'."`
+	SoftPreset         string `json:"soft_preset,omitempty" jsonschema:"soft/softk only: mood preset (default|colorful|bright|muted|deep|dark). Omit = 'default'."`
 
 	// MaxWorkers caps parallel extractions; 0 → 4.
 	MaxWorkers int `json:"max_workers,omitempty" jsonschema:"max parallel extractions (default 4)"`
@@ -339,7 +339,7 @@ func RegisterImageExtract(srv *sdk.Server, deps Deps) {
 	sb := deps.ImageSandbox
 	sdk.AddTool(srv, &sdk.Tool{
 		Name:        "image.extract",
-		Description: "Extract a color palette from an image. Source is one of: local path (subject to read-only/root), http(s):// URL (subject to host allowlist), or base64 image bytes. For soft/softk methods, use 'soft_preset' to pick a Kuler-like mood (default|colorful|bright|muted|deep|dark).",
+		Description: "Extract a color palette from an image. Source is one of: local path (subject to read-only/root), http(s):// URL (subject to host allowlist), or base64 image bytes. For soft/softk methods, use 'soft_preset' to pick a mood (default|colorful|bright|muted|deep|dark).",
 	}, func(ctx context.Context, _ *sdk.CallToolRequest, p ImageExtractParams) (*sdk.CallToolResult, ImageExtractOutput, error) {
 		return handleImageExtract(ctx, p, sb)
 	})

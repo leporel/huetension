@@ -306,6 +306,8 @@ func TestFormatFromExtension(t *testing.T) {
 		".png":  FormatPNG,
 		"jpg":   FormatJPEG,
 		".jpeg": FormatJPEG,
+		"ggr":   FormatGGR,
+		".svg":  FormatSVG,
 	}
 	for ext, want := range cases {
 		got, ok := FormatFromExtension(ext)
@@ -329,5 +331,85 @@ func TestFileExtensionForEveryFormat(t *testing.T) {
 	}
 	if FileExtension("does-not-exist") != "" {
 		t.Error("unknown format should return empty extension")
+	}
+}
+
+func TestGGRStructure(t *testing.T) {
+	out, err := Export(fixturePalette(), FormatGGR, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	if len(lines) != 5 {
+		t.Fatalf("got %d lines, want 5 (header + name + count + 2 segments)\n%s", len(lines), out)
+	}
+	if lines[0] != "GIMP Gradient" {
+		t.Errorf("line 1 = %q, want %q", lines[0], "GIMP Gradient")
+	}
+	if lines[1] != "Name: fixture" {
+		t.Errorf("line 2 = %q, want %q", lines[1], "Name: fixture")
+	}
+	if lines[2] != "2" { // 3 colors → 2 segments
+		t.Errorf("segment count = %q, want 2", lines[2])
+	}
+	for _, seg := range lines[3:] {
+		if n := len(strings.Fields(seg)); n != 13 {
+			t.Errorf("segment %q has %d fields, want 13", seg, n)
+		}
+	}
+	// The gradient must span the whole [0,1] range.
+	if first := strings.Fields(lines[3]); first[0] != "0.000000" {
+		t.Errorf("first segment left = %q, want 0.000000", first[0])
+	}
+	if last := strings.Fields(lines[4]); last[2] != "1.000000" {
+		t.Errorf("last segment right = %q, want 1.000000", last[2])
+	}
+}
+
+// A one-color palette is still a valid (flat) gradient — one segment.
+func TestGGRSingleColor(t *testing.T) {
+	p := palette.New([]color.Color{{R: 10, G: 20, B: 30, A: 255}})
+	out, err := Export(p, FormatGGR, Options{Name: "solid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	if len(lines) != 4 || lines[2] != "1" {
+		t.Fatalf("single-color ggr should have 1 segment, got\n%s", out)
+	}
+}
+
+func TestSVGStructure(t *testing.T) {
+	out, err := Export(fixturePalette(), FormatSVG, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	for _, want := range []string{
+		"<svg ", "<linearGradient ", "</linearGradient>", "</svg>",
+		`fill="url(#fixture)"`, `stop-color="#ff0000"`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("svg missing %q\n%s", want, s)
+		}
+	}
+	if n := strings.Count(s, "<stop "); n != 3 { // 3 colors → 3 stops
+		t.Errorf("stop count = %d, want 3", n)
+	}
+}
+
+func TestSVGIdent(t *testing.T) {
+	cases := map[string]string{
+		"my gradient": "my-gradient",
+		"  spaced  ":  "spaced",
+		"3stops":      "g-3stops",
+		"!!!":         "gradient",
+		"":            "gradient",
+		"a/b\\c":      "a-b-c",
+	}
+	for in, want := range cases {
+		if got := svgIdent(in); got != want {
+			t.Errorf("svgIdent(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

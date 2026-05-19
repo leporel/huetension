@@ -98,8 +98,8 @@ func parseAndValidate(data []byte) (*Index, error) {
 	// must match the version this binary speaks. Empty / missing is
 	// fine (older files predate the field). A future v2 binary will
 	// know to negotiate; today's binary refuses rather than misparse.
-	if f.Schema != "" && f.Schema != "huetension/v1" {
-		return nil, fmt.Errorf("decode: unsupported schema %q (this binary speaks %q)", f.Schema, "huetension/v1")
+	if f.Schema != "" && f.Schema != schemaVersion {
+		return nil, fmt.Errorf("decode: unsupported schema %q (this binary speaks %q)", f.Schema, schemaVersion)
 	}
 	return validateAndIndex(f)
 }

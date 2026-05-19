@@ -7,8 +7,18 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/leporel/huetension/internal/color"
+	"github.com/leporel/huetension/internal/exporter"
 	"github.com/leporel/huetension/internal/gradient"
 	"github.com/leporel/huetension/internal/palette"
+)
+
+// Raster gradient export dimensions. A raster target resamples the
+// gradient at gradientImageWidth steps and draws each as a 1px column,
+// so the strip reads as a smooth gradient rather than the exporter's
+// discrete swatch blocks (which stay correct for a plain palette).
+const (
+	gradientImageWidth  = 512
+	gradientImageHeight = 96
 )
 
 type gradientFlags struct {
@@ -29,7 +39,9 @@ func newGradientCmd() *cobra.Command {
 		Long: "Build a gradient between two or more stops. With exactly 2 stops the gradient runs " +
 			"end-to-end; with 3+ stops they are evenly spaced. Default interpolation space is OkLab — " +
 			"perceptually uniform, no muddy mid-tones.\n\n" +
-			"Stops accept hex / CSS named colors / rgb()-hsl() function notation. The default --steps is 5.",
+			"Stops accept hex / CSS named colors / rgb()-hsl() function notation. The default --steps is 5.\n\n" +
+			"Export the steps as a GIMP gradient (--format ggr) or an SVG <linearGradient> (--format svg). " +
+			"PNG/JPEG render a smooth raster gradient (a fine resample), not a swatch strip.",
 		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGradient(args, &gf, &of)
@@ -44,6 +56,15 @@ func newGradientCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&gf.reverse, "reverse", false, "reverse the sort order")
 
 	return cmd
+}
+
+// buildGradient blends stops into opts.Steps colors — two stops run
+// end-to-end via gradient.Build, three or more via gradient.MultiStop.
+func buildGradient(stops []color.Color, opts gradient.Options) ([]color.Color, error) {
+	if len(stops) == 2 {
+		return gradient.Build(stops[0], stops[1], opts)
+	}
+	return gradient.MultiStop(stops, opts)
 }
 
 func runGradient(rawStops []string, gf *gradientFlags, of *outputFlags) error {
@@ -62,13 +83,7 @@ func runGradient(rawStops []string, gf *gradientFlags, of *outputFlags) error {
 		Easing: gradient.Easing(strings.ToLower(gf.easing)),
 	}
 
-	var colors []color.Color
-	var err error
-	if len(stops) == 2 {
-		colors, err = gradient.Build(stops[0], stops[1], opts)
-	} else {
-		colors, err = gradient.MultiStop(stops, opts)
-	}
+	colors, err := buildGradient(stops, opts)
 	if err != nil {
 		return err
 	}
@@ -103,5 +118,45 @@ func runGradient(rawStops []string, gf *gradientFlags, of *outputFlags) error {
 	}
 	of.headerVerb = "Built"
 	of.headerSource = "gradient (" + strings.Join(stopHex, " → ") + ")"
+
+	// A raster target (png/jpeg) renders the gradient itself; every other
+	// format exports the discrete --steps palette as before.
+	mode, format, err := resolveOutputMode(of)
+	if err != nil {
+		return err
+	}
+	if mode == modeExport && exporter.IsBinary(format) {
+		return writeGradientImage(stops, opts, gf, format, of)
+	}
 	return renderAndWrite(p, of)
+}
+
+// writeGradientImage renders a smooth raster gradient. It resamples the
+// gradient at gradientImageWidth steps and exports each as a 1px-wide
+// swatch, so the result is a continuous gradient strip. --steps (the
+// discrete palette size) does not bound the image resolution.
+func writeGradientImage(stops []color.Color, opts gradient.Options, gf *gradientFlags, format exporter.Format, of *outputFlags) error {
+	dense := opts
+	dense.Steps = gradientImageWidth
+	colors, err := buildGradient(stops, dense)
+	if err != nil {
+		return err
+	}
+	p := palette.New(colors)
+	p.Name = "gradient"
+	// Keep the ordering consistent with the discrete outputs when --sort
+	// is set; for a monotonic ramp this is a no-op or a reverse.
+	if gf.sortBy != "" {
+		if err := p.Sort(palette.SortBy(gf.sortBy), gf.reverse); err != nil {
+			return err
+		}
+	}
+	data, err := exporter.Export(p, format, exporter.Options{
+		SwatchWidth:  1,
+		SwatchHeight: gradientImageHeight,
+	})
+	if err != nil {
+		return err
+	}
+	return writeOutput(of.output, data)
 }

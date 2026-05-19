@@ -25,6 +25,19 @@ import (
 
 const envPrefix = "HUETENSION"
 
+// Config-file keys consumed via viper. config.yaml mirrors the flag tree
+// under per-command sections; only the keys listed here are wired so far.
+// Precedence is the usual viper layering — explicit flag > HUETENSION_*
+// env > config.yaml > built-in default.
+//
+// The `mcp:` section's tool selectors are honoured by both `huetension
+// mcp` and `huetension serve`: "which MCP tools to expose" is one setting
+// regardless of which command hosts the server.
+const (
+	cfgKeyMCPEnable  = "mcp.enable"
+	cfgKeyMCPDisable = "mcp.disable"
+)
+
 var (
 	dataDir string
 	version = "dev"
@@ -83,8 +96,10 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newRandomCmd())
 	root.AddCommand(newCSSCmd())
 	root.AddCommand(newTailwindCmd())
+	root.AddCommand(newLibraryCmd())
 	root.AddCommand(newMCPCmd())
 	root.AddCommand(newWebCmd())
+	root.AddCommand(newServeCmd())
 	root.AddCommand(newCompletionCmd())
 	root.AddCommand(newVersionCmd())
 	return root

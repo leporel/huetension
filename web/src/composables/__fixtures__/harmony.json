@@ -5,7 +5,7 @@
     "count": 2,
     "result": [
       "#6d5afe",
-      "#ebfe5a"
+      "#feea5a"
     ]
   },
   {
@@ -14,8 +14,8 @@
     "count": 3,
     "result": [
       "#6d5afe",
-      "#fe6d5a",
-      "#5afe6d"
+      "#fe9b5a",
+      "#5ffe5a"
     ]
   },
   {
@@ -24,8 +24,8 @@
     "count": 3,
     "result": [
       "#6d5afe",
-      "#febf5a",
-      "#99fe5a"
+      "#fcfe5a",
+      "#fed45a"
     ]
   },
   {
@@ -34,9 +34,9 @@
     "count": 4,
     "result": [
       "#6d5afe",
-      "#fe5a99",
-      "#ebfe5a",
-      "#5afebf"
+      "#fe6b5a",
+      "#feea5a",
+      "#5afeaf"
     ]
   },
   {
@@ -45,9 +45,20 @@
     "count": 4,
     "result": [
       "#6d5afe",
-      "#fe5aeb",
-      "#ebfe5a",
-      "#5afe6d"
+      "#da5afe",
+      "#feea5a",
+      "#b3fe5a"
+    ]
+  },
+  {
+    "type": "compound",
+    "base": "#6D5AFE",
+    "count": 4,
+    "result": [
+      "#6d5afe",
+      "#5a9dfe",
+      "#d2fe5a",
+      "#feea5a"
     ]
   },
   {
@@ -56,9 +67,24 @@
     "count": 4,
     "result": [
       "#6d5afe",
-      "#ebfe5a",
-      "#6d5aff",
-      "#ecff5a"
+      "#feea5a",
+      "#5b567f",
+      "#7f7a56"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#6D5AFE",
+    "count": 8,
+    "result": [
+      "#6d5afe",
+      "#feea5a",
+      "#6d62bf",
+      "#bfb362",
+      "#5b567f",
+      "#7f7a56",
+      "#363540",
+      "#403e35"
     ]
   },
   {
@@ -67,11 +93,27 @@
     "count": 6,
     "result": [
       "#6d5afe",
-      "#fe6d5a",
-      "#5afe6d",
-      "#6d5aff",
-      "#ff6d5a",
-      "#5aff6d"
+      "#fe9b5a",
+      "#5ffe5a",
+      "#5b567f",
+      "#7f6656",
+      "#577f56"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#6D5AFE",
+    "count": 9,
+    "result": [
+      "#6d5afe",
+      "#fe9b5a",
+      "#5ffe5a",
+      "#6960a9",
+      "#a97d60",
+      "#63a960",
+      "#454255",
+      "#554a42",
+      "#435542"
     ]
   },
   {
@@ -80,11 +122,24 @@
     "count": 6,
     "result": [
       "#6d5afe",
-      "#fe5a99",
-      "#ebfe5a",
-      "#5afebf",
-      "#6d5aff",
-      "#ff5a9a"
+      "#fe6b5a",
+      "#feea5a",
+      "#5afeaf",
+      "#5b567f",
+      "#7f5a56"
+    ]
+  },
+  {
+    "type": "compound",
+    "base": "#6D5AFE",
+    "count": 6,
+    "result": [
+      "#6d5afe",
+      "#5a9dfe",
+      "#d2fe5a",
+      "#feea5a",
+      "#5b567f",
+      "#56677f"
     ]
   },
   {
@@ -93,9 +148,9 @@
     "count": 3,
     "step": 30,
     "result": [
-      "#5a99fe",
+      "#5a9dfe",
       "#6d5afe",
-      "#bf5afe"
+      "#c35afe"
     ]
   },
   {
@@ -103,11 +158,11 @@
     "base": "#6D5AFE",
     "count": 5,
     "result": [
-      "#1701be",
-      "#2a0efe",
       "#6d5afe",
-      "#b0a6fe",
-      "#d2ccff"
+      "#7b71cb",
+      "#777398",
+      "#616065",
+      "#282633"
     ]
   },
   {
@@ -128,7 +183,7 @@
     "count": 2,
     "result": [
       "#ffa94d",
-      "#4da3ff"
+      "#4dcbff"
     ]
   },
   {
@@ -137,8 +192,8 @@
     "count": 3,
     "result": [
       "#ffa94d",
-      "#4dffa9",
-      "#a94dff"
+      "#4dff72",
+      "#8b4dff"
     ]
   },
   {
@@ -147,8 +202,8 @@
     "count": 3,
     "result": [
       "#ffa94d",
-      "#4dfcff",
-      "#504dff"
+      "#4d90ff",
+      "#4dfff5"
     ]
   },
   {
@@ -157,9 +212,9 @@
     "count": 4,
     "result": [
       "#ffa94d",
-      "#4dff50",
-      "#4da3ff",
-      "#ff4dfc"
+      "#98ff4d",
+      "#4dcbff",
+      "#e74dff"
     ]
   },
   {
@@ -168,9 +223,20 @@
     "count": 4,
     "result": [
       "#ffa94d",
-      "#a3ff4d",
-      "#4da3ff",
-      "#a94dff"
+      "#ffde4d",
+      "#4dcbff",
+      "#4d57ff"
+    ]
+  },
+  {
+    "type": "compound",
+    "base": "#FFA94D",
+    "count": 4,
+    "result": [
+      "#ffa94d",
+      "#ff754d",
+      "#4d6fff",
+      "#4dcbff"
     ]
   },
   {
@@ -179,9 +245,24 @@
     "count": 4,
     "result": [
       "#ffa94d",
-      "#4da3ff",
+      "#4dcbff",
+      "#806a53",
+      "#537280"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#FFA94D",
+    "count": 8,
+    "result": [
       "#ffa94d",
-      "#4da3ff"
+      "#4dcbff",
+      "#bf8f5b",
+      "#5ba2bf",
+      "#806a53",
+      "#537280",
+      "#403a35",
+      "#353d40"
     ]
   },
   {
@@ -190,11 +271,27 @@
     "count": 6,
     "result": [
       "#ffa94d",
-      "#4dffa9",
-      "#a94dff",
+      "#4dff72",
+      "#8b4dff",
+      "#806a53",
+      "#53805c",
+      "#625380"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#FFA94D",
+    "count": 9,
+    "result": [
       "#ffa94d",
-      "#4dffa9",
-      "#a94dff"
+      "#4dff72",
+      "#8b4dff",
+      "#aa845b",
+      "#5baa6b",
+      "#765baa",
+      "#554b41",
+      "#415545",
+      "#484155"
     ]
   },
   {
@@ -203,11 +300,24 @@
     "count": 6,
     "result": [
       "#ffa94d",
-      "#4dff50",
-      "#4da3ff",
-      "#ff4dfc",
+      "#98ff4d",
+      "#4dcbff",
+      "#e74dff",
+      "#806a53",
+      "#668053"
+    ]
+  },
+  {
+    "type": "compound",
+    "base": "#FFA94D",
+    "count": 6,
+    "result": [
       "#ffa94d",
-      "#4dff50"
+      "#ff754d",
+      "#4d6fff",
+      "#4dcbff",
+      "#806a53",
+      "#805d53"
     ]
   },
   {
@@ -216,9 +326,9 @@
     "count": 3,
     "step": 30,
     "result": [
-      "#ff504d",
+      "#ff754d",
       "#ffa94d",
-      "#fcff4d"
+      "#ffd44d"
     ]
   },
   {
@@ -226,11 +336,11 @@
     "base": "#FFA94D",
     "count": 5,
     "result": [
-      "#b35d00",
-      "#ff8400",
       "#ffa94d",
-      "#ffce9a",
-      "#ffe6cc"
+      "#cc9b66",
+      "#99836b",
+      "#66615c",
+      "#332c24"
     ]
   },
   {
@@ -260,8 +370,8 @@
     "count": 3,
     "result": [
       "#0f172a",
-      "#2a0f17",
-      "#172a0f"
+      "#2a130f",
+      "#1e2a0f"
     ]
   },
   {
@@ -270,8 +380,8 @@
     "count": 3,
     "result": [
       "#0f172a",
-      "#2a140f",
-      "#242a0f"
+      "#2a260f",
+      "#2a1e0f"
     ]
   },
   {
@@ -280,9 +390,9 @@
     "count": 4,
     "result": [
       "#0f172a",
-      "#2a0f25",
+      "#2a0f1a",
       "#2a220f",
-      "#0f2a15"
+      "#0f2a12"
     ]
   },
   {
@@ -291,9 +401,20 @@
     "count": 4,
     "result": [
       "#0f172a",
-      "#220f2a",
+      "#190f2a",
       "#2a220f",
-      "#172a0f"
+      "#2a290f"
+    ]
+  },
+  {
+    "type": "compound",
+    "base": "#0F172A",
+    "count": 4,
+    "result": [
+      "#0f172a",
+      "#0f252a",
+      "#2a280f",
+      "#2a220f"
     ]
   },
   {
@@ -303,8 +424,23 @@
     "result": [
       "#0f172a",
       "#2a220f",
-      "#21335d",
-      "#5d4b21"
+      "#232733",
+      "#332e23"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#0F172A",
+    "count": 8,
+    "result": [
+      "#0f172a",
+      "#2a220f",
+      "#1a2233",
+      "#332c1a",
+      "#232733",
+      "#332e23",
+      "#2b2d33",
+      "#33312b"
     ]
   },
   {
@@ -313,11 +449,27 @@
     "count": 6,
     "result": [
       "#0f172a",
-      "#2a0f17",
-      "#172a0f",
-      "#21335d",
-      "#5d2133",
-      "#335d21"
+      "#2a130f",
+      "#1e2a0f",
+      "#232733",
+      "#332523",
+      "#2c3323"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#0F172A",
+    "count": 9,
+    "result": [
+      "#0f172a",
+      "#2a130f",
+      "#1e2a0f",
+      "#1d2433",
+      "#33201d",
+      "#29331d",
+      "#282b33",
+      "#332a28",
+      "#2e3328"
     ]
   },
   {
@@ -326,11 +478,24 @@
     "count": 6,
     "result": [
       "#0f172a",
-      "#2a0f25",
+      "#2a0f1a",
       "#2a220f",
-      "#0f2a15",
-      "#21335d",
-      "#5d2152"
+      "#0f2a12",
+      "#232733",
+      "#332329"
+    ]
+  },
+  {
+    "type": "compound",
+    "base": "#0F172A",
+    "count": 6,
+    "result": [
+      "#0f172a",
+      "#0f252a",
+      "#2a280f",
+      "#2a220f",
+      "#232733",
+      "#233033"
     ]
   },
   {
@@ -339,9 +504,9 @@
     "count": 3,
     "step": 30,
     "result": [
-      "#0f242a",
+      "#0f252a",
       "#0f172a",
-      "#140f2a"
+      "#150f2a"
     ]
   },
   {
@@ -349,11 +514,11 @@
     "base": "#0F172A",
     "count": 5,
     "result": [
-      "#0d1526",
-      "#0d1526",
       "#0f172a",
-      "#233662",
-      "#37559b"
+      "#1c2333",
+      "#6d7790",
+      "#bbbdc3",
+      "#baccf6"
     ]
   },
   {
@@ -420,7 +585,7 @@
     ]
   },
   {
-    "type": "complementary",
+    "type": "compound",
     "base": "#FFFFFF",
     "count": 4,
     "result": [
@@ -431,6 +596,32 @@
     ]
   },
   {
+    "type": "complementary",
+    "base": "#FFFFFF",
+    "count": 4,
+    "result": [
+      "#ffffff",
+      "#ffffff",
+      "#808080",
+      "#808080"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#FFFFFF",
+    "count": 8,
+    "result": [
+      "#ffffff",
+      "#ffffff",
+      "#bfbfbf",
+      "#bfbfbf",
+      "#808080",
+      "#808080",
+      "#404040",
+      "#404040"
+    ]
+  },
+  {
     "type": "triadic",
     "base": "#FFFFFF",
     "count": 6,
@@ -438,9 +629,25 @@
       "#ffffff",
       "#ffffff",
       "#ffffff",
+      "#808080",
+      "#808080",
+      "#808080"
+    ]
+  },
+  {
+    "type": "triadic",
+    "base": "#FFFFFF",
+    "count": 9,
+    "result": [
       "#ffffff",
       "#ffffff",
-      "#ffffff"
+      "#ffffff",
+      "#aaaaaa",
+      "#aaaaaa",
+      "#aaaaaa",
+      "#555555",
+      "#555555",
+      "#555555"
     ]
   },
   {
@@ -452,8 +659,21 @@
       "#ffffff",
       "#ffffff",
       "#ffffff",
+      "#808080",
+      "#808080"
+    ]
+  },
+  {
+    "type": "compound",
+    "base": "#FFFFFF",
+    "count": 6,
+    "result": [
       "#ffffff",
-      "#ffffff"
+      "#ffffff",
+      "#ffffff",
+      "#ffffff",
+      "#808080",
+      "#808080"
     ]
   },
   {
@@ -472,11 +692,11 @@
     "base": "#FFFFFF",
     "count": 5,
     "result": [
-      "#b3b3b3",
-      "#d9d9d9",
       "#ffffff",
-      "#e6e6e6",
-      "#e6e6e6"
+      "#cca3a3",
+      "#995c5c",
+      "#662929",
+      "#330a0a"
     ]
   },
   {
@@ -543,12 +763,38 @@
     ]
   },
   {
+    "type": "compound",
+    "base": "#000000",
+    "count": 4,
+    "result": [
+      "#000000",
+      "#000000",
+      "#000000",
+      "#000000"
+    ]
+  },
+  {
     "type": "complementary",
     "base": "#000000",
     "count": 4,
     "result": [
       "#000000",
       "#000000",
+      "#333333",
+      "#333333"
+    ]
+  },
+  {
+    "type": "complementary",
+    "base": "#000000",
+    "count": 8,
+    "result": [
+      "#000000",
+      "#000000",
+      "#333333",
+      "#333333",
+      "#333333",
+      "#333333",
       "#333333",
       "#333333"
     ]
@@ -567,7 +813,36 @@
     ]
   },
   {
+    "type": "triadic",
+    "base": "#000000",
+    "count": 9,
+    "result": [
+      "#000000",
+      "#000000",
+      "#000000",
+      "#333333",
+      "#333333",
+      "#333333",
+      "#333333",
+      "#333333",
+      "#333333"
+    ]
+  },
+  {
     "type": "tetradic",
+    "base": "#000000",
+    "count": 6,
+    "result": [
+      "#000000",
+      "#000000",
+      "#000000",
+      "#000000",
+      "#333333",
+      "#333333"
+    ]
+  },
+  {
+    "type": "compound",
     "base": "#000000",
     "count": 6,
     "result": [
@@ -595,11 +870,11 @@
     "base": "#000000",
     "count": 5,
     "result": [
-      "#1a1a1a",
-      "#1a1a1a",
       "#000000",
-      "#262626",
-      "#4d4d4d"
+      "#332929",
+      "#663d3d",
+      "#993d3d",
+      "#cc2929"
     ]
   },
   {

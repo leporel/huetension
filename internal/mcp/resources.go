@@ -33,9 +33,7 @@ type ResourceDescriptor struct {
 	register       func(*sdk.Server)
 }
 
-// allResources is the canonical resource catalogue. Slice F.1 ships one
-// resource (the envelope schema); slice 3 (out of scope) will add the
-// huetension://library* family.
+// allResources is the canonical resource catalogue.
 var allResources = []ResourceDescriptor{
 	{
 		URI:            EnvelopeSchemaURI,

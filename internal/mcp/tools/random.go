@@ -15,7 +15,7 @@ import (
 type PaletteRandomParams struct {
 	Count   int    `json:"count,omitempty" jsonschema:"palette size (default 5, max 32)"`
 	Seed    uint64 `json:"seed,omitempty" jsonschema:"PRNG seed for deterministic output (0 = wall clock)"`
-	Harmony string `json:"harmony,omitempty" jsonschema:"optional harmony rule (none|complementary|analogous|triadic|split-complementary|tetradic|square|double-complementary|monochromatic|shades); when set, a random base is picked and the palette comes from harmony.generate"`
+	Harmony string `json:"harmony,omitempty" jsonschema:"optional harmony rule (none|complementary|analogous|triadic|split-complementary|tetradic|square|double-complementary|compound|monochromatic|shades); when set, a random base is picked and the palette comes from harmony.generate"`
 }
 
 // PaletteRandomOutput wraps a random palette in the huetension/v1 envelope.

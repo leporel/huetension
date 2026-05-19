@@ -53,14 +53,39 @@ type libraryGetResult struct {
 	Palette libraryPaletteJSON `json:"palette"`
 }
 
-// registerLibrary mounts the three library REST endpoints on mux under
-// base. Called from buildHandler when cfg.Library is non-nil; nil is
-// allowed but produces a 503 from each route so misconfiguration is
-// visible to the operator without crashing the rest of the server.
-func registerLibrary(mux *http.ServeMux, base string, idx *library.Index) {
-	mux.HandleFunc("GET "+base+"/library", libraryIndexHandler(idx))
-	mux.HandleFunc("GET "+base+"/library/{category}", libraryByCategoryHandler(idx))
-	mux.HandleFunc("GET "+base+"/library/palette/{id}", libraryGetHandler(idx))
+// libraryState is the web layer's view of the catalogue: the shared
+// library.Store (concurrency-safe, persists saves) plus this server's
+// read-only posture. readOnly mirrors the sandbox flag — a read-only
+// server refuses saves even when the store has a writable path.
+type libraryState struct {
+	store    *library.Store
+	readOnly bool
+}
+
+// newLibraryState wraps the loaded index, its on-disk path, and the
+// server's read-only posture. idx may be nil (no catalogue configured);
+// path may be empty (no data directory); readOnly true disables saving.
+func newLibraryState(idx *library.Index, path string, readOnly bool) *libraryState {
+	return &libraryState{store: library.NewStore(idx, path), readOnly: readOnly}
+}
+
+// current returns the catalogue index visible right now.
+func (st *libraryState) current() *library.Index {
+	if st == nil {
+		return nil
+	}
+	return st.store.Index()
+}
+
+// registerLibrary mounts the library REST endpoints on mux under base.
+// Called from buildAppMux; a nil index produces a 503 from each route so
+// misconfiguration is visible to the operator without crashing the rest
+// of the server. The POST route appends a user palette and persists it.
+func registerLibrary(mux *http.ServeMux, base string, st *libraryState) {
+	mux.HandleFunc("GET "+base+"/library", libraryIndexHandler(st))
+	mux.HandleFunc("GET "+base+"/library/{category}", libraryByCategoryHandler(st))
+	mux.HandleFunc("GET "+base+"/library/palette/{id}", libraryGetHandler(st))
+	mux.HandleFunc("POST "+base+"/library/palette", librarySaveHandler(st))
 }
 
 // libraryUnavailable returns true and writes a 503 when no index is
@@ -74,32 +99,24 @@ func libraryUnavailable(w http.ResponseWriter, idx *library.Index) bool {
 	return true
 }
 
-func libraryIndexHandler(idx *library.Index) http.HandlerFunc {
-	// The catalogue is immutable for the process lifetime (loaded once
-	// at startup — there is no reload path on library.Index), so the
-	// full /library body and its content-hash ETag are computed here at
-	// registration. The handler just replays them, letting clients
-	// short-circuit a reload to a bodiless 304.
-	var (
-		body     []byte
-		etag     string
-		buildErr error
-	)
-	if idx != nil {
-		body, buildErr = buildLibraryIndexBody(idx)
-		if buildErr == nil {
-			sum := sha256.Sum256(body)
-			etag = `"` + hex.EncodeToString(sum[:16]) + `"`
-		}
-	}
+func libraryIndexHandler(st *libraryState) http.HandlerFunc {
+	// The catalogue is mutable — a save publishes a new index — so the
+	// body and its content-hash ETag are rebuilt per request. The
+	// catalogue is small (a few dozen palettes), so this is cheap, and
+	// it keeps the ETag honest: a save changes the bytes and therefore
+	// the ETag, so a stale client revalidates instead of getting a 304.
 	return func(w http.ResponseWriter, r *http.Request) {
+		idx := st.current()
 		if libraryUnavailable(w, idx) {
 			return
 		}
-		if buildErr != nil {
-			writeError(w, http.StatusInternalServerError, buildErr)
+		body, err := buildLibraryIndexBody(idx)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		sum := sha256.Sum256(body)
+		etag := `"` + hex.EncodeToString(sum[:16]) + `"`
 		h := w.Header()
 		h.Set("ETag", etag)
 		// no-cache = the browser must revalidate every time; our ETag
@@ -156,8 +173,9 @@ func etagMatches(inm, etag string) bool {
 	return false
 }
 
-func libraryByCategoryHandler(idx *library.Index) http.HandlerFunc {
+func libraryByCategoryHandler(st *libraryState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		idx := st.current()
 		if libraryUnavailable(w, idx) {
 			return
 		}
@@ -193,8 +211,9 @@ func libraryByCategoryHandler(idx *library.Index) http.HandlerFunc {
 	}
 }
 
-func libraryGetHandler(idx *library.Index) http.HandlerFunc {
+func libraryGetHandler(st *libraryState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		idx := st.current()
 		if libraryUnavailable(w, idx) {
 			return
 		}
@@ -214,6 +233,72 @@ func libraryGetHandler(idx *library.Index) http.HandlerFunc {
 			return
 		}
 		writeEnvelope(w, "library.get", map[string]any{"id": id}, libraryGetResult{Palette: encoded})
+	}
+}
+
+// librarySaveRequest is the body of POST /library/palette. The server
+// owns the ID and force-adds the "Saved" category — clients send only
+// the palette content.
+type librarySaveRequest struct {
+	Name        string   `json:"name"`
+	Colors      []string `json:"colors"`
+	Categories  []string `json:"categories,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Description string   `json:"description,omitempty"`
+}
+
+// librarySaveHandler appends a user palette to the catalogue and
+// persists it via the shared library.Store. Saving requires a writable
+// server: a read-only server answers 403, a server with no data
+// directory answers 503, while the read endpoints keep working either way.
+func librarySaveHandler(st *libraryState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if libraryUnavailable(w, st.current()) {
+			return
+		}
+		if st.readOnly {
+			writeError(w, http.StatusForbidden,
+				errors.New("library: saving is disabled on this read-only server"))
+			return
+		}
+		var req librarySaveRequest
+		if err := decodeJSON(r, &req); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		saved, err := st.store.Save(library.SaveInput{
+			Name:        req.Name,
+			Description: req.Description,
+			Colors:      req.Colors,
+			Categories:  req.Categories,
+			Tags:        req.Tags,
+		})
+		if err != nil {
+			writeLibrarySaveError(w, err)
+			return
+		}
+		encoded, err := encodeLibraryPalette(saved)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeEnvelope(w, "library.save", map[string]any{"name": saved.Name},
+			libraryGetResult{Palette: encoded})
+	}
+}
+
+// writeLibrarySaveError maps a library.Store.Save failure onto an HTTP
+// status: no on-disk path is 503, a disk fault is 500 (its detail kept
+// server-side), and anything else is a 400 on the client's input.
+func writeLibrarySaveError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, library.ErrNotPersistable):
+		writeError(w, http.StatusServiceUnavailable, err)
+	case errors.Is(err, library.ErrPersist):
+		writeError(w, http.StatusInternalServerError,
+			errors.New("library: failed to persist the palette"))
+	default:
+		writeError(w, http.StatusBadRequest, err)
 	}
 }
 

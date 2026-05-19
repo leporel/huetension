@@ -33,8 +33,8 @@ const (
 	EasingEaseInOut Easing = "ease-in-out"
 )
 
-// Options configures Build and MultiStop. Zero values default to OkLab and
-// linear easing.
+// Options configures Build, MultiStop, and MultiStopAt. Zero values
+// default to OkLab and linear easing.
 type Options struct {
 	Steps  int
 	Space  Space
@@ -73,13 +73,28 @@ func Build(from, to color.Color, opts Options) ([]color.Color, error) {
 }
 
 // MultiStop blends through stops with even spacing — stop[0] at t=0,
-// stop[N-1] at t=1, intermediate stops evenly distributed.
+// stop[N-1] at t=1, intermediate stops evenly distributed. It is
+// MultiStopAt with the stops spread evenly across [0,1].
 func MultiStop(stops []color.Color, opts Options) ([]color.Color, error) {
+	return MultiStopAt(stops, evenPositions(len(stops)), opts)
+}
+
+// MultiStopAt blends through stops placed at explicit positions in [0,1].
+// positions must hold one entry per stop, be strictly increasing, and pin
+// the first stop to 0 and the last to 1.
+//
+// Easing is applied to the global parameter t first; the eased t then
+// selects a segment and a local 0..1 fraction within it — one shared
+// curve across the whole gradient, not a per-segment easing.
+func MultiStopAt(stops []color.Color, positions []float64, opts Options) ([]color.Color, error) {
 	if len(stops) < 2 {
 		return nil, fmt.Errorf("gradient: need at least 2 stops (got %d)", len(stops))
 	}
 	if opts.Steps < len(stops) {
 		return nil, fmt.Errorf("gradient: steps (%d) must be >= number of stops (%d)", opts.Steps, len(stops))
+	}
+	if err := validatePositions(positions, len(stops)); err != nil {
+		return nil, err
 	}
 	sp := opts.Space
 	if sp == "" {
@@ -99,13 +114,17 @@ func MultiStop(stops []color.Color, opts Options) ([]color.Color, error) {
 		raw := float64(i) / float64(opts.Steps-1)
 		t := ease(raw, es)
 
-		// Map t into (segment index, local t within segment).
-		scaled := t * float64(segments)
-		seg := int(scaled)
-		if seg >= segments {
-			seg = segments - 1
+		// Locate the segment t falls into, then the local 0..1 fraction
+		// across that segment's (possibly uneven) position span.
+		seg := 0
+		for seg < segments-1 && t >= positions[seg+1] {
+			seg++
 		}
-		local := scaled - float64(seg)
+		span := positions[seg+1] - positions[seg]
+		local := 0.0
+		if span > 0 {
+			local = (t - positions[seg]) / span
+		}
 
 		c, err := lerp(stops[seg], stops[seg+1], local, sp)
 		if err != nil {
@@ -114,6 +133,40 @@ func MultiStop(stops []color.Color, opts Options) ([]color.Color, error) {
 		out[i] = c
 	}
 	return out, nil
+}
+
+// evenPositions returns n positions evenly spread across [0,1] with the
+// endpoints pinned exactly to 0 and 1.
+func evenPositions(n int) []float64 {
+	pos := make([]float64, n)
+	if n < 2 {
+		return pos
+	}
+	for i := range pos {
+		pos[i] = float64(i) / float64(n-1)
+	}
+	pos[n-1] = 1
+	return pos
+}
+
+// validatePositions checks that positions is a valid stop placement: one
+// entry per stop, strictly increasing, with the endpoints pinned to 0
+// and 1. nStops is assumed >= 2 (the caller rejects fewer stops first).
+func validatePositions(positions []float64, nStops int) error {
+	if len(positions) != nStops {
+		return fmt.Errorf("gradient: got %d positions for %d stops", len(positions), nStops)
+	}
+	if positions[0] != 0 || positions[nStops-1] != 1 {
+		return fmt.Errorf("gradient: positions must start at 0 and end at 1 (got %g..%g)",
+			positions[0], positions[nStops-1])
+	}
+	for i := 1; i < nStops; i++ {
+		if positions[i] <= positions[i-1] {
+			return fmt.Errorf("gradient: positions must be strictly increasing (positions[%d]=%g <= positions[%d]=%g)",
+				i, positions[i], i-1, positions[i-1])
+		}
+	}
+	return nil
 }
 
 // ease maps t in 0..1 through the chosen easing curve.

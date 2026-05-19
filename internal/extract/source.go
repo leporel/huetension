@@ -10,7 +10,7 @@ import (
 // AnnotateSources attaches a representative-pixel coordinate to each
 // color in p, sampling from img. The coordinate is normalised to [0,1]
 // on both axes with the origin at the top-left of img — same coordinate
-// system browsers use, so the Web UI's Kuler-style pin overlay can place
+// system browsers use, so the Web UI's draggable pin overlay can place
 // pins by multiplying with the rendered image's bounding box.
 //
 // Matching is nearest-neighbour in sRGB space (Euclidean over R/G/B as

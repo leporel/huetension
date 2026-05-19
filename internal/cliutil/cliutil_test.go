@@ -43,7 +43,7 @@ func TestRenderColorsAlignsRows(t *testing.T) {
 	if len(lines) != 3 {
 		t.Fatalf("got %d rows, want 3:\n%s", len(lines), got)
 	}
-	for _, want := range []string{"#ff0000", "#00ff00", "#0000ff", "50.0%", "30.0%"} {
+	for _, want := range []string{"#ff0000", "#00ff00", "#0000ff", "hsl(", "hsv(", "50.0%", "30.0%"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q\n%s", want, got)
 		}
@@ -56,7 +56,7 @@ func TestRenderColorsOmitsFreqWhenAllZero(t *testing.T) {
 		{B: 255, A: 255},
 	}
 	got := RenderColors(cs, Options{NoColor: true})
-	if strings.Contains(got, "%") {
+	if strings.Contains(got, "0.0%") {
 		t.Errorf("freq column should be omitted, got:\n%s", got)
 	}
 }

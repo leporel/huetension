@@ -9,6 +9,7 @@ export interface GradientOptions {
   from?: string;
   to?: string;
   stops?: string; // comma-separated colors (mutually exclusive with from/to)
+  positions?: string; // comma-separated 0..1 stop positions, parallel to stops
   steps: number;
   space?: GradientSpace;
   easing?: GradientEasing;

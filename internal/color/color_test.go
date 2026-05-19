@@ -138,9 +138,35 @@ func TestFormatRoundTripsThroughHex(t *testing.T) {
 				t.Errorf("Parse(%q) [%s of %v] error: %v", s, f, c, err)
 				continue
 			}
-			if !channelsClose(parsed, c, 2) {
-				t.Errorf("round trip via %s: %v -> %q -> %v (drift > 2)", f, c, s, parsed)
+			tol := 2
+			if f == FormatLab || f == FormatLCH {
+				tol = 8
 			}
+			if !channelsClose(parsed, c, tol) {
+				t.Errorf("round trip via %s: %v -> %q -> %v (drift > %d)", f, c, s, parsed, tol)
+			}
+		}
+	}
+}
+
+func TestIntegerComponentFormatters(t *testing.T) {
+	c, err := Parse("#3366cc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := map[Format]string{
+		FormatHSL: "hsl(220 60% 50%)",
+		FormatHSV: "hsv(220 75% 80%)",
+		FormatLab: "lab(45 19 -58)",
+		FormatLCH: "lch(45 61 288)",
+	}
+	for f, want := range cases {
+		got, err := c.Format(f)
+		if err != nil {
+			t.Fatalf("Format(%s): %v", f, err)
+		}
+		if got != want {
+			t.Errorf("Format(%s) = %q, want %q", f, got, want)
 		}
 	}
 }

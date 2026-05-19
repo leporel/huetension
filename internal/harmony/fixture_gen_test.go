@@ -31,10 +31,10 @@ func TestGenerateParityFixture(t *testing.T) {
 	}
 
 	// Cases cover every harmony type, every natural anchor count, plus
-	// one count-beyond-anchors case per hue-rotation type so the
-	// HSV ring-delta expansion path is also pinned.
+	// count-beyond-anchors cases per hue-rotation type so the cycle-grouped
+	// extra-slot expansion path is also pinned — including multi-cycle counts.
 	bases := []string{"#6D5AFE", "#FFA94D", "#0F172A", "#FFFFFF", "#000000"}
-	hueRot := []Type{Complementary, Triadic, Split, Tetradic, DoubleComplementary}
+	hueRot := []Type{Complementary, Triadic, Split, Tetradic, DoubleComplementary, Compound}
 
 	out := make([]harmonyCase, 0, 64)
 
@@ -56,14 +56,17 @@ func TestGenerateParityFixture(t *testing.T) {
 				Result: hexes(res),
 			})
 		}
-		// Expanded counts (anchors + 2 ring slots) to exercise ringDeltas.
+		// Expanded counts (anchors + extra slots), single- and multi-cycle.
 		for _, exp := range []struct {
 			t Type
 			n int
 		}{
 			{Complementary, 4},
+			{Complementary, 8}, // n=2 → 3 extra cycles
 			{Triadic, 6},
+			{Triadic, 9}, // n=3 → 2 extra cycles
 			{Tetradic, 6},
+			{Compound, 6},
 		} {
 			res, err := Generate(exp.t, base, Options{Count: exp.n})
 			if err != nil {

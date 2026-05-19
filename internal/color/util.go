@@ -48,6 +48,10 @@ func formatFloat(v float64, prec int) string {
 	return s
 }
 
+func roundInt(v float64) int {
+	return int(math.Round(v))
+}
+
 // formatAlpha emits the alpha channel using the same compact representation
 // browsers use: "1" / "0" / "0.5" etc.
 func formatAlpha(a uint8) string {

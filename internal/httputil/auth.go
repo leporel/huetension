@@ -1,7 +1,7 @@
 // Package httputil holds HTTP transport helpers shared by huetension's
-// network-facing internal packages (mcp, web). Each helper is a thin
-// http.Handler middleware or a request-classification predicate; nothing
-// here is business-specific.
+// network-facing internal packages (mcp, web, serve): thin http.Handler
+// middleware, request-classification predicates, and the shared
+// operational logger constructor. Nothing here is business-specific.
 package httputil
 
 import (

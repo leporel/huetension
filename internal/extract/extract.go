@@ -98,7 +98,7 @@ type Options struct {
 	// Soft mode only. 0 falls back to defaultSoftMergeEpsilon.
 	MergeEpsilon float64
 
-	// SoftPreset — Kuler-like mood preset for Soft/SoftK. Empty string is
+	// SoftPreset — mood preset for Soft/SoftK. Empty string is
 	// treated as SoftPresetDefault — the soft pipeline always runs the
 	// perceptual (OkLCH chroma + OkL) filter and ranking.
 	SoftPreset SoftPreset

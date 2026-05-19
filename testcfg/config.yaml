@@ -1,0 +1,9 @@
+# Throwaway config for testing config.yaml consumption (S9.1).
+# Point a command at this directory with --data-dir .\testcfg
+#
+# The mcp: section is honoured by BOTH `huetension mcp` and
+# `huetension serve` — it selects which MCP tools the server exposes.
+mcp:
+  disable:
+    - image.extract
+    - image.extractBatch

@@ -42,13 +42,17 @@ type Config struct {
 	// values ("*" for allow-any). Empty disables CORS entirely.
 	CORSOrigins []string
 
-	// LogLevel selects verbosity for the default JSON logger built when
-	// Logger is nil. Accepts "debug", "info", "warn", "error". Empty
-	// defaults to "info".
+	// LogLevel selects verbosity for the default logger built when Logger
+	// is nil. Accepts "debug", "info", "warn", "error". Empty defaults to
+	// "info".
 	LogLevel string
 
-	// Logger overrides the default logger. When nil, BuildHandler /
-	// Run construct a JSON logger writing to stderr at LogLevel.
+	// LogFormat selects the default logger's handler: "text" (default,
+	// human-readable) or "json". Ignored when Logger is set explicitly.
+	LogFormat string
+
+	// Logger overrides the default logger. When nil, BuildHandler / Run
+	// construct a logger writing to stderr in LogFormat at LogLevel.
 	Logger *slog.Logger
 
 	// Sandbox controls /api/v1/extract: which path inputs are allowed
@@ -64,6 +68,13 @@ type Config struct {
 	// CLI loads this via library.Load(externalPath) and threads it in;
 	// see cmd/huetension/cli/web.go.
 	Library *library.Index
+
+	// LibraryPath is the on-disk library.json a saved palette is
+	// persisted to (POST /api/v1/library/palette). It may name a file
+	// that does not exist yet — the first save bootstraps it with the
+	// embedded defaults plus the new entry. Empty disables saving: the
+	// save endpoint then answers 503 while the read endpoints still work.
+	LibraryPath string
 
 	// DevProxy, when non-empty, makes the server reverse-proxy every non-API
 	// request to this URL (e.g. "http://localhost:5173" for the Vite dev

@@ -10,12 +10,13 @@ import (
 // Deps carries cross-cutting configuration the parent mcp package threads
 // into tool registrations. Most tools ignore it; image.* tools consume
 // ImageSandbox to gate filesystem and network access; library.* tools
-// consume Library to serve the curated catalogue. Logger, when non-nil,
-// can be used by tools to emit handler-internal events; nil is a valid
-// value (tools should fall back to a no-op rather than panicking).
+// consume Library to read the catalogue and (library.save) grow it.
+// Logger, when non-nil, can be used by tools to emit handler-internal
+// events; nil is a valid value (tools should fall back to a no-op rather
+// than panicking).
 type Deps struct {
 	ImageSandbox ImageSandbox
-	Library      *library.Index
+	Library      *library.Store
 	Logger       *slog.Logger
 }
 

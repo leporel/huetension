@@ -100,5 +100,15 @@ export const useLibraryStore = defineStore('library', () => {
     return cache.value?.palettes.find((p) => p.id === id);
   }
 
-  return { categories, palettes, loaded, loading, error, load, getById };
+  /**
+   * Re-fetch the catalogue now, bypassing the once-per-session guard.
+   * Called after a save so the new palette — and any new category it
+   * introduces — appear without a page reload. The conditional GET sees
+   * the changed ETag and returns the full updated body.
+   */
+  async function refresh(): Promise<void> {
+    await doLoad();
+  }
+
+  return { categories, palettes, loaded, loading, error, load, refresh, getById };
 });

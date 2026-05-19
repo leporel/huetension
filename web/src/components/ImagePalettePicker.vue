@@ -5,7 +5,7 @@ import { useWorkspaceStore } from '../stores/workspace';
 import { useImagePixelSampler } from '../composables/useImagePixelSampler';
 
 /**
- * Kuler-style pin overlay. Each unlocked workspace slot with a
+ * Draggable pin overlay. Each unlocked workspace slot with a
  * `source` field gets a draggable pin on the image. Pin drag samples
  * the pixel under it and calls `workspace.setSlotPin` so the gesture
  * undoes color + position together.

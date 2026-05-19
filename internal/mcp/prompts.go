@@ -21,7 +21,7 @@ type PromptDescriptor struct {
 	register       func(*sdk.Server)
 }
 
-// allPrompts is the canonical prompt catalogue. Slice F.2 ships two
+// allPrompts is the canonical prompt catalogue. Ships two
 // scaffolding prompts: extract-from-mood (creative) and audit-contrast
 // (review). Both are pure templates — the LLM is expected to call the
 // referenced tools itself.
@@ -142,7 +142,7 @@ func extractFromMoodHandler(_ context.Context, req *sdk.GetPromptRequest) (*sdk.
 		"",
 		"Reasoning steps:",
 		"1. Choose a base color (any CSS color string — hex, named, rgb(), hsl(), oklch()) that anchors the mood.",
-		"2. Choose a harmony type from {complementary, analogous, triadic, split-complementary, tetradic, square, double-complementary, monochromatic, shades} that best matches the mood.",
+		"2. Choose a harmony type from {complementary, analogous, triadic, split-complementary, tetradic, square, double-complementary, compound, monochromatic, shades} that best matches the mood.",
 		fmt.Sprintf("3. Call the harmony.generate tool with arguments {type, base, count: %s}. Return the colors from result.palette.colors as the answer.", count),
 		"4. Briefly justify the base color and harmony type you picked. Do not invent colors outside the harmony.generate output.",
 	}, "\n")

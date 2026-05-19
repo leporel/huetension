@@ -1,32 +1,44 @@
 import { api, type RequestOptions } from './client';
 import type { ExportResult } from './types';
 
-export type CSSKind = 'vars' | 'scss' | 'less';
+/** Every format POST /export accepts — mirrors exporter.AllFormats. */
+export type ExportFormat =
+  | 'json'
+  | 'css'
+  | 'scss'
+  | 'less'
+  | 'tailwind'
+  | 'txt'
+  | 'gpl'
+  | 'ggr'
+  | 'svg'
+  | 'png'
+  | 'jpeg';
 
-export interface ExportCSSRequest {
+export interface ExportRequest {
+  format: ExportFormat;
   colors: string[];
   name?: string;
-  kind?: CSSKind;
-}
-
-/** POST /api/v1/export/css. */
-export function css(
-  req: ExportCSSRequest,
-  opts?: RequestOptions,
-): Promise<ExportResult> {
-  return api.postJSON<ExportResult>('/export/css', req, opts);
-}
-
-export interface ExportTailwindRequest {
-  colors: string[];
-  name?: string;
+  /** Shade-scale count; only meaningful for format=tailwind. */
   shades?: number;
 }
 
-/** POST /api/v1/export/tailwind. */
-export function tailwind(
-  req: ExportTailwindRequest,
+/** POST /api/v1/export — render a color list into any exporter format.
+ *  Binary formats (png/jpeg) come back base64-encoded; see ExportResult. */
+export function general(
+  req: ExportRequest,
   opts?: RequestOptions,
 ): Promise<ExportResult> {
-  return api.postJSON<ExportResult>('/export/tailwind', req, opts);
+  return api.postJSON<ExportResult>('/export', req, opts);
+}
+
+/** Decode a binary ExportResult (encoding === "base64") into a Blob,
+ *  picking the MIME type from the result's format. Shared by every
+ *  caller that needs to preview or download png/jpeg output. */
+export function decodeBinary(res: ExportResult): Blob {
+  const bin = atob(res.content);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const mime = res.format === 'jpeg' ? 'image/jpeg' : 'image/png';
+  return new Blob([bytes], { type: mime });
 }

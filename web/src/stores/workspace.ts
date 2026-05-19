@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { useRefHistory, useStorage } from '@vueuse/core';
-import { computed } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
+import { fromHex, fromHSV, toHex, toHSV } from '../composables/useColor';
 
 /**
  * Active palette state shared across every feature card.
@@ -8,10 +9,9 @@ import { computed } from 'vue';
  * - `colors` is the live palette. Wheel handles, image pins, library
  *   load, and randomise all write here.
  * - `locks[i]` mirrors `colors[i]` — when true the slot ignores wheel
- *   gestures and image-pin drags (S5/S6 read this; S4b only owns the
- *   plumbing).
- * - History captures one snapshot per *setter call*. S5 batches gestures
- *   so a pointerdown→pointermove→pointerup is one undoable step.
+ *   gestures and image-pin drags.
+ * - History captures one snapshot per *setter call*. Wheel gestures are
+ *   batched so a pointerdown→pointermove→pointerup is one undoable step.
  * - The whole state survives reloads via `useStorage`. We clear the
  *   history right after construction so the first undo lands on the
  *   persisted state, not the default seed.
@@ -19,7 +19,7 @@ import { computed } from 'vue';
 
 /**
  * Image-space pin coordinate, 0..1 normalised, origin top-left.
- * Mirrors `color.Source` on the wire (S2). Present only for slots
+ * Mirrors `color.Source` on the wire. Present only for slots
  * sourced from an image extraction; harmony/random/library slots
  * have no source.
  */
@@ -36,6 +36,12 @@ export interface WorkspaceSlot {
 
 export interface WorkspaceState {
   colors: WorkspaceSlot[];
+}
+
+export interface SlotHSV {
+  h: number;
+  s: number;
+  v: number;
 }
 
 const STORAGE_KEY = 'huetension:workspace';
@@ -77,6 +83,50 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   const colors = computed(() => state.value.colors);
   const size = computed(() => state.value.colors.length);
+
+  // --- selection (view state) -----------------------------------------
+  // The palette index the wheel / strip / per-color controls act on.
+  // Deliberately *outside* `state`: it is neither persisted nor part of
+  // the undo history. The watcher keeps it in range whenever the palette
+  // shrinks — covers setColors, undo, redo, reset in one place.
+  const selectedSlot = ref(0);
+
+  function selectSlot(i: number) {
+    if (i < 0 || i >= state.value.colors.length) return;
+    selectedSlot.value = i;
+  }
+
+  watch(size, (n) => {
+    if (selectedSlot.value > n - 1) selectedSlot.value = Math.max(0, n - 1);
+  });
+
+  // --- HSV edit intent (view state) -----------------------------------
+  // What the user *meant* for a slot, kept so a colour driven to an
+  // achromatic extreme (V = 0, or S = 0) still remembers its hue and
+  // saturation — otherwise the wheel handle collapses to the centre and
+  // a gesture starting on it has no meaningful angle. Session-only: not
+  // persisted, not in the undo history.
+  //
+  // Trusted only while the intent still round-trips to the slot's
+  // current hex. Any non-HSV writer (library load, harmony regen, undo,
+  // reorder) changes the hex, the stale intent no longer matches, and
+  // `effectiveHSV` silently falls back to deriving HSV from the hex — so
+  // no explicit invalidation is ever needed.
+  const slotHsv = reactive(new Map<number, SlotHSV>());
+
+  function recordSlotHsv(i: number, hsv: SlotHSV) {
+    slotHsv.set(i, { h: hsv.h, s: hsv.s, v: hsv.v });
+  }
+
+  function effectiveHSV(i: number): SlotHSV {
+    const slot = state.value.colors[i];
+    if (!slot) return { h: 0, s: 0, v: 0 };
+    const intent = slotHsv.get(i);
+    if (intent && toHex(fromHSV(intent.h, intent.s, intent.v)) === slot.hex) {
+      return { h: intent.h, s: intent.s, v: intent.v };
+    }
+    return toHSV(fromHex(slot.hex));
+  }
 
   function setColors(next: WorkspaceSlot[]) {
     state.value = { colors: next.map(cloneSlot) };
@@ -143,6 +193,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     state,
     colors,
     size,
+    selectedSlot,
+    selectSlot,
+    recordSlotHsv,
+    effectiveHSV,
     canUndo: history.canUndo,
     canRedo: history.canRedo,
     undo: history.undo,

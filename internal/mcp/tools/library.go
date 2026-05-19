@@ -18,8 +18,7 @@ import (
 // license) the catalogue keeps alongside the colors. Library tools
 // intentionally use their own envelope (rather than the palette
 // envelope used by extract / harmony / gradient) so adding curatorial
-// fields here doesn't drift the standard wire contract — see Option B
-// in the S3 design discussion.
+// fields here doesn't drift the standard wire contract
 type LibraryPalette struct {
 	ID          string               `json:"id" jsonschema:"unique slug for this palette"`
 	Name        string               `json:"name" jsonschema:"display name"`
@@ -56,12 +55,12 @@ type LibraryCategoriesOutput struct {
 }
 
 func RegisterLibraryCategories(srv *sdk.Server, deps Deps) {
-	idx := deps.Library
+	store := deps.Library
 	sdk.AddTool(srv, &sdk.Tool{
 		Name:        "library.categories",
 		Description: "List the categories in the curated palette catalogue (with palette counts). Slugs are stable URL-safe identifiers usable as the 'category' filter on library.list.",
 	}, func(ctx context.Context, _ *sdk.CallToolRequest, p LibraryCategoriesParams) (*sdk.CallToolResult, LibraryCategoriesOutput, error) {
-		_, out, err := handleLibraryCategories(ctx, idx, p)
+		_, out, err := handleLibraryCategories(ctx, store.Index(), p)
 		return nil, out, err
 	})
 }
@@ -102,12 +101,12 @@ type LibraryListOutput struct {
 }
 
 func RegisterLibraryList(srv *sdk.Server, deps Deps) {
-	idx := deps.Library
+	store := deps.Library
 	sdk.AddTool(srv, &sdk.Tool{
 		Name:        "library.list",
 		Description: "List palettes in the curated catalogue, optionally filtered by category (slug or display name) and/or tag.",
 	}, func(ctx context.Context, _ *sdk.CallToolRequest, p LibraryListParams) (*sdk.CallToolResult, LibraryListOutput, error) {
-		_, out, err := handleLibraryList(ctx, idx, p)
+		_, out, err := handleLibraryList(ctx, store.Index(), p)
 		return nil, out, err
 	})
 }
@@ -165,12 +164,12 @@ type LibraryGetOutput struct {
 }
 
 func RegisterLibraryGet(srv *sdk.Server, deps Deps) {
-	idx := deps.Library
+	store := deps.Library
 	sdk.AddTool(srv, &sdk.Tool{
 		Name:        "library.get",
 		Description: "Fetch a single palette from the curated catalogue by id.",
 	}, func(ctx context.Context, _ *sdk.CallToolRequest, p LibraryGetParams) (*sdk.CallToolResult, LibraryGetOutput, error) {
-		_, out, err := handleLibraryGet(ctx, idx, p)
+		_, out, err := handleLibraryGet(ctx, store.Index(), p)
 		return nil, out, err
 	})
 }
@@ -196,6 +195,68 @@ func handleLibraryGet(_ context.Context, idx *library.Index, p LibraryGetParams)
 		Tool:   "library.get",
 		Params: LibraryGetParams{ID: id},
 		Result: LibraryGetResult{Palette: encoded},
+	}, nil
+}
+
+// ---------- library.save ----------
+
+type LibrarySaveParams struct {
+	Name        string   `json:"name" jsonschema:"display name for the palette"`
+	Colors      []string `json:"colors" jsonschema:"palette colors (hex, rgb(), CSS name, ...) — at least one"`
+	Categories  []string `json:"categories,omitempty" jsonschema:"extra categories to file the palette under; the \"Saved\" category is always added"`
+	Tags        []string `json:"tags,omitempty" jsonschema:"free-form tags"`
+	Description string   `json:"description,omitempty" jsonschema:"one-line description"`
+}
+
+type LibrarySaveResult struct {
+	Palette LibraryPalette `json:"palette" jsonschema:"the saved palette, including its server-generated id"`
+}
+
+type LibrarySaveOutput struct {
+	Schema string            `json:"schema" jsonschema:"wire-contract version (huetension/v1)"`
+	Tool   string            `json:"tool" jsonschema:"the tool that produced this result"`
+	Params LibrarySaveParams `json:"params" jsonschema:"the parameters the tool was invoked with"`
+	Result LibrarySaveResult `json:"result"`
+}
+
+func RegisterLibrarySave(srv *sdk.Server, deps Deps) {
+	store := deps.Library
+	readOnly := deps.ImageSandbox.ReadOnly
+	sdk.AddTool(srv, &sdk.Tool{
+		Name:        "library.save",
+		Description: "Save a palette to the on-disk library so it joins the catalogue (filed under the \"Saved\" category). The server generates the id. Disabled on a read-only server or one with no data directory.",
+	}, func(ctx context.Context, _ *sdk.CallToolRequest, p LibrarySaveParams) (*sdk.CallToolResult, LibrarySaveOutput, error) {
+		_, out, err := handleLibrarySave(ctx, store, readOnly, p)
+		return nil, out, err
+	})
+}
+
+func handleLibrarySave(_ context.Context, store *library.Store, readOnly bool, p LibrarySaveParams) (*sdk.CallToolResult, LibrarySaveOutput, error) {
+	if store.Index() == nil {
+		return nil, LibrarySaveOutput{}, errors.New("library: index is not configured on this server")
+	}
+	if readOnly {
+		return nil, LibrarySaveOutput{}, errors.New("library: saving is disabled on this read-only server")
+	}
+	saved, err := store.Save(library.SaveInput{
+		Name:        p.Name,
+		Description: p.Description,
+		Colors:      p.Colors,
+		Categories:  p.Categories,
+		Tags:        p.Tags,
+	})
+	if err != nil {
+		return nil, LibrarySaveOutput{}, err
+	}
+	encoded, err := encodeLibraryPalette(saved)
+	if err != nil {
+		return nil, LibrarySaveOutput{}, err
+	}
+	return nil, LibrarySaveOutput{
+		Schema: schemaVersion,
+		Tool:   "library.save",
+		Params: p,
+		Result: LibrarySaveResult{Palette: encoded},
 	}, nil
 }
 

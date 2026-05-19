@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,6 +15,7 @@ import (
 	"github.com/leporel/huetension/internal/exporter"
 	huemcp "github.com/leporel/huetension/internal/mcp"
 	"github.com/leporel/huetension/internal/palette/library"
+	"github.com/leporel/huetension/internal/sandbox"
 )
 
 // newLibraryServer is the test-only variant of newTestServer that
@@ -33,6 +35,26 @@ func newLibraryServer(t *testing.T) (string, func()) {
 	}
 	ts := httptest.NewServer(h)
 	return ts.URL, ts.Close
+}
+
+// newWritableLibraryServer is newLibraryServer with a writable
+// library.json path, so the POST /library/palette save endpoint is
+// enabled. Returns the base URL, the on-disk path, and a teardown func.
+func newWritableLibraryServer(t *testing.T) (string, string, func()) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "library.json")
+	cfg := Config{
+		Version:     "test",
+		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Library:     library.MustLoadDefaults(),
+		LibraryPath: path,
+	}
+	h, err := BuildHandler(cfg)
+	if err != nil {
+		t.Fatalf("BuildHandler: %v", err)
+	}
+	ts := httptest.NewServer(h)
+	return ts.URL, path, ts.Close
 }
 
 func TestLibraryIndexEnvelope(t *testing.T) {
@@ -117,6 +139,44 @@ func TestLibraryIndexETag(t *testing.T) {
 	}
 	if len(body3) == 0 {
 		t.Error("200 response had an empty body")
+	}
+}
+
+func TestLibraryIndexETagChangesAfterSave(t *testing.T) {
+	base, _, stop := newWritableLibraryServer(t)
+	defer stop()
+
+	resp1, err := http.Get(base + "/api/v1/library")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	resp1.Body.Close()
+	etag1 := resp1.Header.Get("ETag")
+	if etag1 == "" {
+		t.Fatal("no ETag on first /library response")
+	}
+
+	// A save changes the catalogue bytes — the ETag must move with them.
+	if saveResp := doPOST(t, base, "/api/v1/library/palette", map[string]any{
+		"name": "Etag Probe", "colors": []string{"#abcdef"},
+	}, nil); saveResp.StatusCode != http.StatusOK {
+		t.Fatalf("save: status %d", saveResp.StatusCode)
+	}
+
+	// A client holding the pre-save ETag must now revalidate to a full
+	// 200, not get a stale 304.
+	req, _ := http.NewRequest(http.MethodGet, base+"/api/v1/library", nil)
+	req.Header.Set("If-None-Match", etag1)
+	resp2, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("conditional GET: %v", err)
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		t.Errorf("after save, pre-save ETag: status %d, want 200", resp2.StatusCode)
+	}
+	if etag2 := resp2.Header.Get("ETag"); etag2 == etag1 {
+		t.Errorf("ETag unchanged after save: %q", etag2)
 	}
 }
 
@@ -224,8 +284,144 @@ func TestLibraryUnavailableWhenNotConfigured(t *testing.T) {
 	}
 }
 
+func TestLibrarySaveCreatesPalette(t *testing.T) {
+	base, path, stop := newWritableLibraryServer(t)
+	defer stop()
+
+	var env struct {
+		Tool   string `json:"tool"`
+		Result struct {
+			Palette struct {
+				ID         string               `json:"id"`
+				Name       string               `json:"name"`
+				Categories []string             `json:"categories"`
+				Colors     []exporter.ColorJSON `json:"colors"`
+			} `json:"palette"`
+		} `json:"result"`
+	}
+	resp := doPOST(t, base, "/api/v1/library/palette", map[string]any{
+		"name":       "My Sunset",
+		"colors":     []string{"#ff8800", "#cc4400"},
+		"categories": []string{"Warm"},
+		"tags":       []string{"demo"},
+	}, &env)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: %d", resp.StatusCode)
+	}
+	if env.Tool != "library.save" {
+		t.Errorf("tool: got %q, want library.save", env.Tool)
+	}
+	p := env.Result.Palette
+	if p.ID != "my-sunset" {
+		t.Errorf("generated id: got %q, want my-sunset", p.ID)
+	}
+	// "Saved" is force-added; the client extra follows it.
+	if len(p.Categories) != 2 || p.Categories[0] != "Saved" || p.Categories[1] != "Warm" {
+		t.Errorf("categories: got %v, want [Saved Warm]", p.Categories)
+	}
+	if len(p.Colors) != 2 {
+		t.Errorf("colors: got %d, want 2", len(p.Colors))
+	}
+
+	// The palette is persisted — it round-trips through a fresh Load.
+	reloaded, err := library.Load(path)
+	if err != nil {
+		t.Fatalf("reload library.json: %v", err)
+	}
+	if _, ok := reloaded.Get("my-sunset"); !ok {
+		t.Error("saved palette not present in persisted library.json")
+	}
+	// ...and is visible on the same server's GET endpoint right away.
+	if got := doGET(t, base, "/api/v1/library/palette/my-sunset", nil); got.StatusCode != http.StatusOK {
+		t.Errorf("GET saved palette: status %d, want 200", got.StatusCode)
+	}
+}
+
+func TestLibrarySaveAssignsUniqueID(t *testing.T) {
+	base, _, stop := newWritableLibraryServer(t)
+	defer stop()
+
+	idOf := func(name string) string {
+		var env struct {
+			Result struct {
+				Palette struct {
+					ID string `json:"id"`
+				} `json:"palette"`
+			} `json:"result"`
+		}
+		resp := doPOST(t, base, "/api/v1/library/palette", map[string]any{
+			"name": name, "colors": []string{"#101010"},
+		}, &env)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("save %q: status %d", name, resp.StatusCode)
+		}
+		return env.Result.Palette.ID
+	}
+	if first, second := idOf("Twins"), idOf("Twins"); first != "twins" || second != "twins-2" {
+		t.Errorf("ids: got %q, %q; want twins, twins-2", first, second)
+	}
+}
+
+func TestLibrarySaveRejectsBadInput(t *testing.T) {
+	base, _, stop := newWritableLibraryServer(t)
+	defer stop()
+
+	cases := []struct {
+		name    string
+		payload map[string]any
+	}{
+		{"no name", map[string]any{"colors": []string{"#000000"}}},
+		{"no colors", map[string]any{"name": "Empty"}},
+		{"bad color", map[string]any{"name": "Bad", "colors": []string{"definitely-not-a-color"}}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			resp := doPOST(t, base, "/api/v1/library/palette", c.payload, nil)
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Errorf("status: got %d, want 400", resp.StatusCode)
+			}
+		})
+	}
+}
+
+func TestLibrarySaveUnavailableWithoutPath(t *testing.T) {
+	// newLibraryServer configures a catalogue but no LibraryPath, so the
+	// read endpoints work while saving is disabled.
+	base, stop := newLibraryServer(t)
+	defer stop()
+	resp := doPOST(t, base, "/api/v1/library/palette", map[string]any{
+		"name": "Nope", "colors": []string{"#000000"},
+	}, nil)
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("status: got %d, want 503", resp.StatusCode)
+	}
+}
+
+func TestLibrarySaveForbiddenWhenReadOnly(t *testing.T) {
+	cfg := Config{
+		Version:     "test",
+		Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Library:     library.MustLoadDefaults(),
+		LibraryPath: filepath.Join(t.TempDir(), "library.json"),
+		Sandbox:     sandbox.ImageSandbox{ReadOnly: true},
+	}
+	h, err := BuildHandler(cfg)
+	if err != nil {
+		t.Fatalf("BuildHandler: %v", err)
+	}
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	resp := doPOST(t, ts.URL, "/api/v1/library/palette", map[string]any{
+		"name": "Nope", "colors": []string{"#000000"},
+	}, nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("status: got %d, want 403", resp.StatusCode)
+	}
+}
+
 // TestLibraryRESTvsMCPColorParity is the cross-transport guarantee
-// promised by S3 — REST `/library/palette/{id}` and MCP `library.get`
+// REST `/library/palette/{id}` and MCP `library.get`
 // must produce byte-identical `colors` arrays for the same id, run
 // against the same Index. By construction both sides funnel through
 // exporter.EncodeColors after library.Palette.ToPalette, so any drift

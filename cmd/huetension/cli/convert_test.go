@@ -35,6 +35,22 @@ func TestConvertCmdAllFormatsText(t *testing.T) {
 	}
 }
 
+func TestConvertCmdUsesIntegerComponents(t *testing.T) {
+	stdout := withStdoutBuffer(t)
+
+	cmd := newConvertCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"#3366cc", "--to", "lab"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got := strings.TrimSpace(stdout.String()); got != "lab(45 19 -58)" {
+		t.Errorf("got %q, want lab(45 19 -58)", got)
+	}
+}
+
 func TestConvertCmdSingleFormat(t *testing.T) {
 	stdout := withStdoutBuffer(t)
 

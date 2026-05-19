@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// SoftPreset is a Kuler-like mood preset for the Soft/SoftK pipeline. One
+// SoftPreset is a mood preset for the Soft/SoftK pipeline. One
 // value drives both the perceptual pre-filter (OkLCH chroma + OkL bounds)
 // and the ranking weights. Empty string means "no preset" — the legacy
 // HSL-knob path stays in effect for back-compat.

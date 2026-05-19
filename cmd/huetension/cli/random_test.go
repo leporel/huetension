@@ -42,7 +42,7 @@ func TestRandomCmdRespectsCount(t *testing.T) {
 }
 
 func TestRandomCmdHarmony(t *testing.T) {
-	// Default --count=5 with triadic (3 anchors) → Kuler-style expansion to 5.
+	// Default --count=5 with triadic (3 anchors) → extra-slot expansion to 5.
 	stdout := withStdoutBuffer(t)
 	cmd := newRandomCmd()
 	cmd.SetOut(&bytes.Buffer{})
@@ -54,6 +54,20 @@ func TestRandomCmdHarmony(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
 	if len(lines) != 5 {
 		t.Errorf("got %d lines, want 5 (default --count=5 expanded)", len(lines))
+	}
+}
+
+func TestRandomCmdTextIncludesHSLAndHSV(t *testing.T) {
+	stdout := withStdoutBuffer(t)
+	cmd := newRandomCmd()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"--seed", "100", "--harmony", "triadic", "--format", "text"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if out := stdout.String(); !strings.Contains(out, "hsl(") || !strings.Contains(out, "hsv(") {
+		t.Errorf("text output should include hsl and hsv columns:\n%s", out)
 	}
 }
 

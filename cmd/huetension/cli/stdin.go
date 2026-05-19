@@ -15,7 +15,7 @@ var stdinReader io.Reader = os.Stdin
 
 // errPartialFailure is the sentinel returned by commands that processed
 // some inputs successfully but had errors on others. The root command's
-// custom exit-code mapping (slice 8d) will translate this to exit 2,
+// custom exit-code mapping will translate this to exit 2,
 // matching Pylette's convention. For now it just propagates as a normal
 // error so the command still exits non-zero.
 var errPartialFailure = errors.New("one or more inputs failed")

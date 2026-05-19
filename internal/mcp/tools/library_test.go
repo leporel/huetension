@@ -2,11 +2,54 @@ package tools
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/leporel/huetension/internal/palette/library"
 )
+
+func TestHandleLibrarySave(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "library.json")
+	store := library.NewStore(library.MustLoadDefaults(), path)
+
+	_, out, err := handleLibrarySave(context.Background(), store, false, LibrarySaveParams{
+		Name:       "MCP Palette",
+		Colors:     []string{"#123456", "#abcdef"},
+		Categories: []string{"Cool"},
+	})
+	if err != nil {
+		t.Fatalf("handleLibrarySave: %v", err)
+	}
+	if out.Schema != schemaVersion || out.Tool != "library.save" {
+		t.Errorf("envelope: %+v", out)
+	}
+	p := out.Result.Palette
+	if p.ID != "mcp-palette" {
+		t.Errorf("generated id: got %q, want mcp-palette", p.ID)
+	}
+	if len(p.Categories) != 2 || p.Categories[0] != library.SavedCategory || p.Categories[1] != "Cool" {
+		t.Errorf("categories: got %v, want [%s Cool]", p.Categories, library.SavedCategory)
+	}
+
+	// The save is visible to a subsequent library.get on the same store.
+	_, getOut, err := handleLibraryGet(context.Background(), store.Index(), LibraryGetParams{ID: "mcp-palette"})
+	if err != nil {
+		t.Fatalf("library.get after save: %v", err)
+	}
+	if getOut.Result.Palette.ID != "mcp-palette" {
+		t.Error("saved palette not visible via library.get on the same store")
+	}
+}
+
+func TestHandleLibrarySaveReadOnly(t *testing.T) {
+	store := library.NewStore(library.MustLoadDefaults(), filepath.Join(t.TempDir(), "library.json"))
+	if _, _, err := handleLibrarySave(context.Background(), store, true, LibrarySaveParams{
+		Name: "Nope", Colors: []string{"#000000"},
+	}); err == nil {
+		t.Error("expected an error when the server is read-only")
+	}
+}
 
 func TestLibraryCategoriesEnvelope(t *testing.T) {
 	idx := library.MustLoadDefaults()

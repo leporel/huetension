@@ -56,7 +56,7 @@
     },
     "color": {
       "type": "object",
-      "required": ["hex", "rgb", "hsl", "oklch"],
+      "required": ["hex", "rgb", "hsl", "hsv", "oklch"],
       "additionalProperties": false,
       "properties": {
         "hex": {
@@ -78,6 +78,13 @@
           "items": { "type": "integer" },
           "description": "HSL [hue °, saturation %, lightness %]."
         },
+        "hsv": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "integer" },
+          "description": "HSV [hue °, saturation %, value %]."
+        },
         "oklch": {
           "type": "array",
           "minItems": 3,
@@ -93,7 +100,7 @@
         },
         "source": {
           "type": "object",
-          "description": "Optional. Normalised representative-pixel coordinate (origin top-left). Populated only for palettes extracted from images; used by the Web UI's Kuler-style pin overlay.",
+          "description": "Optional. Normalised representative-pixel coordinate (origin top-left). Populated only for palettes extracted from images; used by the Web UI's draggable pin overlay.",
           "required": ["x", "y"],
           "additionalProperties": false,
           "properties": {

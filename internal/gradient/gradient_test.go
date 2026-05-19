@@ -135,6 +135,80 @@ func TestMultiStopErrors(t *testing.T) {
 	}
 }
 
+// TestMultiStopAtEvenEqualsMultiStop guards the refactor: MultiStop is now
+// MultiStopAt with evenly spread positions, so the two must agree exactly.
+func TestMultiStopAtEvenEqualsMultiStop(t *testing.T) {
+	stops := []color.Color{
+		mustParse(t, "red"),
+		mustParse(t, "yellow"),
+		mustParse(t, "blue"),
+	}
+	for _, sp := range []Space{SpaceRGB, SpaceOkLab, SpaceOkLCH} {
+		opts := Options{Steps: 9, Space: sp}
+		even, err := MultiStop(stops, opts)
+		if err != nil {
+			t.Fatalf("MultiStop %s: %v", sp, err)
+		}
+		at, err := MultiStopAt(stops, evenPositions(len(stops)), opts)
+		if err != nil {
+			t.Fatalf("MultiStopAt %s: %v", sp, err)
+		}
+		for i := range even {
+			if even[i] != at[i] {
+				t.Errorf("space %s step %d: MultiStop %v != MultiStopAt %v",
+					sp, i, even[i], at[i])
+			}
+		}
+	}
+}
+
+// TestMultiStopAtRepositions confirms moving a stop's position changes the
+// blend: pushing the middle stop toward t=0 lightens the t=0.5 sample.
+func TestMultiStopAtRepositions(t *testing.T) {
+	stops := []color.Color{
+		mustParse(t, "black"),
+		mustParse(t, "red"),
+		mustParse(t, "white"),
+	}
+	opts := Options{Steps: 5, Space: SpaceRGB}
+
+	early, err := MultiStopAt(stops, []float64{0, 0.1, 1}, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	late, err := MultiStopAt(stops, []float64{0, 0.9, 1}, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Middle stop near the start → t=0.5 sample sits between red and white;
+	// near the end → between black and red. The former is lighter.
+	if early[2].OkL() <= late[2].OkL() {
+		t.Errorf("middle sample: early OkL %.3f should exceed late OkL %.3f",
+			early[2].OkL(), late[2].OkL())
+	}
+}
+
+func TestMultiStopAtValidation(t *testing.T) {
+	r := mustParse(t, "red")
+	opts := Options{Steps: 8}
+	cases := []struct {
+		name  string
+		stops []color.Color
+		pos   []float64
+	}{
+		{"wrong length", []color.Color{r, r, r}, []float64{0, 1}},
+		{"first not 0", []color.Color{r, r, r}, []float64{0.1, 0.5, 1}},
+		{"last not 1", []color.Color{r, r, r}, []float64{0, 0.5, 0.9}},
+		{"not increasing", []color.Color{r, r, r, r}, []float64{0, 0.6, 0.3, 1}},
+		{"duplicate position", []color.Color{r, r, r, r}, []float64{0, 0.5, 0.5, 1}},
+	}
+	for _, c := range cases {
+		if _, err := MultiStopAt(c.stops, c.pos, opts); err == nil {
+			t.Errorf("%s: expected error", c.name)
+		}
+	}
+}
+
 func TestUnknownSpace(t *testing.T) {
 	red := mustParse(t, "red")
 	if _, err := Build(red, red, Options{Steps: 3, Space: Space("not-a-space")}); err == nil {

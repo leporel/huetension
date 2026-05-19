@@ -116,7 +116,7 @@ func decodeExtract(t *testing.T, resp *http.Response) extractResponse {
 // TestExtractMultipartHappyPath drives the SPA's expected upload path:
 // multipart/form-data with an `image` file field and option form
 // fields. Asserts a successful 200 + populated palette + every color
-// carries a source pin (the Kuler-overlay contract).
+// carries a source pin (the pin-overlay contract).
 func TestExtractMultipartHappyPath(t *testing.T) {
 	base, teardown := newExtractTestServer(t, sandbox.ImageSandbox{})
 	defer teardown()

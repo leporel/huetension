@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useLibraryStore } from '../stores/library';
 import { useWorkspaceStore } from '../stores/workspace';
+import { useHarmonyStore } from '../stores/harmony';
 import type { LibraryPalette } from '../api/types';
 
 /**
@@ -20,6 +21,7 @@ const props = defineProps<{ selectedId: string | null }>();
 const router = useRouter();
 const library = useLibraryStore();
 const workspace = useWorkspaceStore();
+const harmony = useHarmonyStore();
 
 onMounted(() => {
   void library.load();
@@ -97,11 +99,19 @@ function applyToWorkspace(): void {
   const p = detail.value;
   if (!p) return;
   // Library load is a wholesale palette replace (the new palette may
-  // even differ in length), so locks are discarded — unlike S6's image
+  // even differ in length), so locks are discarded — unlike image
   // re-extraction, which preserves them because it keeps the same
   // workspace shape. The "Replace?" confirm + one-keypress undo are the
   // user's safety nets. One setColors call = one undo snapshot.
   workspace.setColors(p.colors.map((c) => ({ hex: c.hex.toUpperCase(), locked: false })));
+  // Sync the harmony store to the loaded palette. Without this the
+  // store keeps its stale type/count, so the next Count change would
+  // regenerate a harmony from slot 0 and discard the loaded palette.
+  // A load is a wholesale replace → 'custom', count = the loaded length.
+  // (The harmony store is session state, not in the undo history, so
+  // this adds no extra undo step — the load stays one snapshot.)
+  harmony.setType('custom');
+  harmony.setCount(p.colors.length);
   confirming.value = false;
 }
 

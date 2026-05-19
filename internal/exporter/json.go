@@ -61,6 +61,7 @@ type ColorJSON struct {
 	RGB    [3]uint8      `json:"rgb"`
 	RGBA   *[4]uint8     `json:"rgba,omitempty"`
 	HSL    [3]int        `json:"hsl"`
+	HSV    [3]int        `json:"hsv"`
 	OkLCH  [3]int        `json:"oklch"`
 	Freq   float64       `json:"freq,omitempty"`
 	Source *color.Source `json:"source,omitempty"`
@@ -134,11 +135,13 @@ func EncodeColors(in []color.Color) []ColorJSON {
 
 func encodeColor(c color.Color) ColorJSON {
 	h, s, l := c.ToHSL()
+	hh, ss, v := c.ToHSV()
 	okL, okC, okH := c.ToOkLCH()
 	out := ColorJSON{
 		Hex:    c.Hex(),
 		RGB:    [3]uint8{c.R, c.G, c.B},
 		HSL:    [3]int{roundDeg(h), pct(s), pct(l)},
+		HSV:    [3]int{roundDeg(hh), pct(ss), pct(v)},
 		OkLCH:  [3]int{pct(okL), pct(okC), roundDeg(okH)},
 		Freq:   c.Freq,
 		Source: c.Source,

@@ -3,8 +3,6 @@
 // palette, harmony, …) up as an MCP tool — input schema, handler, structured
 // output type — and exposes a Register* function that the parent mcp package
 // installs onto an *sdk.Server.
-//
-// Slice A wires color.convert. Subsequent slices add the rest.
 package tools
 
 import (

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -41,10 +41,21 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	httpSrv := &http.Server{
-		Addr:              cfg.Address,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+
+	// Bind first, then announce — a bind failure surfaces as an error,
+	// never a misleading "listening" log.
+	ln, err := net.Listen("tcp", cfg.Address)
+	if err != nil {
+		return fmt.Errorf("web: listen %s: %w", cfg.Address, err)
+	}
+	logger.LogAttrs(ctx, slog.LevelInfo, "web.listening",
+		slog.String("address", ln.Addr().String()),
+		slog.Bool("auth", strings.TrimSpace(cfg.AuthToken) != ""),
+		slog.String("api_base", normaliseBasePath(cfg.BasePath)),
+	)
 
 	go func() {
 		<-ctx.Done()
@@ -53,16 +64,15 @@ func Run(ctx context.Context, cfg Config) error {
 		_ = httpSrv.Shutdown(shutCtx)
 	}()
 
-	if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("web: listen %s: %w", cfg.Address, err)
+	if err := httpSrv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("web: serve %s: %w", cfg.Address, err)
 	}
 	return nil
 }
 
 // BuildHandler returns the composed http.Handler for the web server
-// without starting a listener. Exposed for tests and for the future
-// `huetension serve` command (S9) that mounts this handler alongside
-// the MCP transports on a shared listener.
+// without starting a listener — REST API + SPA wrapped in the
+// CORS / bearer-auth / access-log middleware. Exposed for tests.
 func BuildHandler(cfg Config) (http.Handler, error) {
 	logger, err := resolveLogger(cfg)
 	if err != nil {
@@ -71,14 +81,28 @@ func BuildHandler(cfg Config) (http.Handler, error) {
 	return buildHandler(cfg, logger)
 }
 
-// buildHandler is the shared composition step. Caller provides the
-// already-resolved logger so Run and BuildHandler can both use it
-// without re-resolving (and tests can inject their own).
-func buildHandler(cfg Config, logger *slog.Logger) (http.Handler, error) {
+// Handler returns the REST API + SPA http.Handler WITHOUT the
+// CORS / bearer-auth / access-log middleware that Run and BuildHandler
+// apply. The `huetension serve` command composes this with the MCP
+// handler on a shared mux and wraps the result in one middleware stack,
+// so the web tree must not also carry its own. Standalone callers want
+// Run or BuildHandler instead.
+func Handler(cfg Config) (http.Handler, error) {
+	return buildAppMux(cfg)
+}
+
+// buildAppMux registers the REST endpoints under cfg.BasePath and the SPA
+// (or the --dev reverse proxy) at "/". It applies no middleware:
+// buildHandler wraps the result for the standalone server; serve wraps
+// its own composition.
+func buildAppMux(cfg Config) (*http.ServeMux, error) {
 	base := normaliseBasePath(cfg.BasePath)
 
 	mux := http.NewServeMux()
-	registerAPI(mux, base, apiHandlers{sandbox: cfg.Sandbox, library: cfg.Library})
+	registerAPI(mux, base, apiHandlers{
+		sandbox: cfg.Sandbox,
+		library: newLibraryState(cfg.Library, cfg.LibraryPath, cfg.Sandbox.ReadOnly),
+	})
 
 	// "/" serves either the embedded SPA (default) or a reverse proxy
 	// to the Vite dev server when --dev is set. API routes registered
@@ -89,6 +113,17 @@ func buildHandler(cfg Config, logger *slog.Logger) (http.Handler, error) {
 		return nil, err
 	}
 	mux.Handle("/", root)
+	return mux, nil
+}
+
+// buildHandler is the shared composition step. Caller provides the
+// already-resolved logger so Run and BuildHandler can both use it
+// without re-resolving (and tests can inject their own).
+func buildHandler(cfg Config, logger *slog.Logger) (http.Handler, error) {
+	mux, err := buildAppMux(cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	var h http.Handler = mux
 	h = httputil.WithCORS(cfg.CORSOrigins, h)
@@ -134,34 +169,13 @@ func normaliseBasePath(p string) string {
 	return p
 }
 
-// resolveLogger returns the *slog.Logger to use for this server.
-// Mirrors internal/mcp's resolveLogger so both transports format logs
-// identically — same fields, same destination (stderr by default).
+// resolveLogger returns the *slog.Logger to use for this server. When the
+// caller pre-set cfg.Logger it is returned verbatim; otherwise
+// httputil.NewLogger builds one — shared with internal/mcp so both
+// transports format logs identically.
 func resolveLogger(cfg Config) (*slog.Logger, error) {
 	if cfg.Logger != nil {
 		return cfg.Logger, nil
 	}
-	level, err := parseLogLevel(cfg.LogLevel)
-	if err != nil {
-		return nil, err
-	}
-	return newJSONLogger(os.Stderr, level), nil
-}
-
-func newJSONLogger(w io.Writer, level slog.Level) *slog.Logger {
-	return slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{Level: level}))
-}
-
-func parseLogLevel(s string) (slog.Level, error) {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "", "info":
-		return slog.LevelInfo, nil
-	case "debug":
-		return slog.LevelDebug, nil
-	case "warn", "warning":
-		return slog.LevelWarn, nil
-	case "error":
-		return slog.LevelError, nil
-	}
-	return 0, fmt.Errorf("web: unknown log level %q (want debug|info|warn|error)", s)
+	return httputil.NewLogger(os.Stderr, cfg.LogFormat, cfg.LogLevel)
 }

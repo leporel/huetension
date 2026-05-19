@@ -75,8 +75,9 @@ func Swatch(c color.Color, opts Options) string {
 }
 
 // RenderPalette formats p as a multi-line text block: one row per color,
-// columns swatch / hex / rgb / freq% (the freq column is omitted when
-// every color has zero frequency, e.g. for harmony / gradient output).
+// columns swatch / hex / rgb / hsl / hsv / freq% (the freq column is
+// omitted when every color has zero frequency, e.g. for harmony / gradient
+// output).
 func RenderPalette(p *palette.Palette, opts Options) string {
 	if p == nil || p.Len() == 0 {
 		return ""
@@ -92,7 +93,7 @@ func RenderColors(colors []color.Color, opts Options) string {
 	}
 
 	hasFreq := false
-	maxHex, maxRGB := 0, 0
+	maxHex, maxRGB, maxHSL, maxHSV := 0, 0, 0, 0
 	for _, c := range colors {
 		if c.Freq > 0 {
 			hasFreq = true
@@ -103,6 +104,12 @@ func RenderColors(colors []color.Color, opts Options) string {
 		if l := len(c.RGB()); l > maxRGB {
 			maxRGB = l
 		}
+		if l := len(c.HSL()); l > maxHSL {
+			maxHSL = l
+		}
+		if l := len(c.HSV()); l > maxHSV {
+			maxHSV = l
+		}
 	}
 
 	var b strings.Builder
@@ -111,7 +118,7 @@ func RenderColors(colors []color.Color, opts Options) string {
 		// (mixed opaque/translucent palettes can have 7- vs 9-char hex,
 		// and rgb() length varies with digit count). Swatch comes first
 		// and isn't fmt-padded — its width is fixed in Swatch().
-		fmt.Fprintf(&b, "%s  %-*s  %-*s", Swatch(c, opts), maxHex, c.Hex(), maxRGB, c.RGB())
+		fmt.Fprintf(&b, "%s  %-*s  %-*s  %-*s  %-*s", Swatch(c, opts), maxHex, c.Hex(), maxRGB, c.RGB(), maxHSL, c.HSL(), maxHSV, c.HSV())
 		if hasFreq {
 			fmt.Fprintf(&b, "  %5.1f%%", c.Freq*100)
 		}
