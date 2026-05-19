@@ -29,10 +29,9 @@ const extraction = useExtractionStore();
 const route = useRoute();
 
 const base = computed(() => {
-  // The Harmony card's read-out follows the harmony base; in custom mode
-  // there is no harmony, so it tracks the wheel-selected slot instead.
-  const idx = harmony.type === 'custom' ? workspace.selectedSlot : 0;
-  const c = workspace.colors[idx];
+  // The Harmony card's read-out always tracks the wheel-selected slot, so
+  // it reflects whichever colour the user is currently editing.
+  const c = workspace.colors[workspace.selectedSlot];
   if (!c) return null;
   const rgb = fromHex(c.hex);
   return {

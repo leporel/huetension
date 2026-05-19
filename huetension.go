@@ -194,7 +194,7 @@ var (
 )
 
 // Exporter surface — render a palette to JSON / CSS / SCSS / Tailwind /
-// plain hex / GIMP .gpl.
+// plain hex / GIMP .gpl / .ggr / SVG / PNG / JPEG / Adobe .ase / .aco.
 type (
 	ExportFormat  = exporter.Format
 	ExportOptions = exporter.Options
@@ -212,6 +212,8 @@ const (
 	FormatSVG      = exporter.FormatSVG
 	FormatPNG      = exporter.FormatPNG
 	FormatJPEG     = exporter.FormatJPEG
+	FormatASE      = exporter.FormatASE
+	FormatACO      = exporter.FormatACO
 )
 
 var (

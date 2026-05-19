@@ -25,7 +25,7 @@ const (
 // around the wheel with a small angular jitter, then randomising saturation
 // and lightness within ranges that avoid muddy or eye-burning colors.
 //
-// Algorithm (mirrors color-palette-api/randomPalette but tuned for variety):
+// Algorithm:
 //
 //	hue        = baseHue + (360/n)*i + jitter ∈ ±10°
 //	saturation ∈ [0.50, 0.80]

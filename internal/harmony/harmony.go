@@ -33,7 +33,7 @@ const (
 	Analogous           Type = "analogous"
 	Triadic             Type = "triadic"
 	Split               Type = "split-complementary"
-	Tetradic            Type = "tetradic"             // 0/90/180/270 — matches color-palette-api
+	Tetradic            Type = "tetradic"             // 0/90/180/270
 	Square              Type = "square"               // alias for Tetradic
 	DoubleComplementary Type = "double-complementary" // 0/38/180/218 — rectangular
 	Compound            Type = "compound"             // 0/-30/-150/180 — base + complement clusters

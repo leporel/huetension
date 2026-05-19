@@ -53,7 +53,7 @@ type outputFlags struct {
 // json.
 func addOutputFlags(cmd *cobra.Command, of *outputFlags, defFormat string) {
 	of.defFormat = defFormat
-	cmd.Flags().StringVarP(&of.format, "format", "f", defFormat, "output format (text|json|css|scss|less|tailwind|txt|gpl|ggr|svg|png|jpeg)")
+	cmd.Flags().StringVarP(&of.format, "format", "f", defFormat, "output format (text|json|css|scss|less|tailwind|txt|gpl|ggr|svg|png|jpeg|ase|aco)")
 	cmd.Flags().StringVarP(&of.output, "output", "o", "-", "output file path; use \"-\" for stdout. PNG/JPEG extensions render a swatch image")
 	cmd.Flags().BoolVar(&of.pretty, "pretty", false, "pretty-print JSON output")
 	cmd.Flags().StringVar(&of.prefix, "prefix", "", "prefix for CSS/SCSS/Tailwind variable names (default \"color\")")

@@ -1,8 +1,9 @@
-// Package exporter renders a *palette.Palette into one of several text
+// Package exporter renders a *palette.Palette into one of several
 // formats: JSON (the huetension/v1 wire contract), CSS custom properties,
 // SCSS variables, a Tailwind theme.extend.colors snippet, plain hex per
-// line, the GIMP .gpl palette and .ggr gradient formats, and a standalone
-// SVG <linearGradient>.
+// line, the GIMP .gpl palette and .ggr gradient formats, a standalone
+// SVG <linearGradient>, swatch images (PNG / JPEG), and the Adobe .ase /
+// .aco swatch interchange formats.
 //
 // The package has a single Export entrypoint dispatching by Format. Each
 // format lives in its own file so adding a new one is a matter of writing
@@ -40,6 +41,11 @@ const (
 	// handles) treats []byte the same regardless.
 	FormatPNG  Format = "png"
 	FormatJPEG Format = "jpeg"
+	// FormatASE / FormatACO are Adobe's binary swatch-interchange formats —
+	// .ase (Swatch Exchange, application-agnostic) and .aco (Photoshop
+	// Color Swatch). Both render as binary; see ase.go / aco.go.
+	FormatASE Format = "ase"
+	FormatACO Format = "aco"
 )
 
 // AllFormats lists every supported export Format. Used by tests and CLI
@@ -56,6 +62,8 @@ var AllFormats = []Format{
 	FormatSVG,
 	FormatPNG,
 	FormatJPEG,
+	FormatASE,
+	FormatACO,
 }
 
 // Options configures format-specific rendering. Zero values are sensible
@@ -141,16 +149,22 @@ func Export(p *palette.Palette, format Format, opts Options) ([]byte, error) {
 		return renderSwatchPNG(p, opts)
 	case FormatJPEG:
 		return renderSwatchJPEG(p, opts)
+	case FormatASE:
+		return renderASE(p), nil
+	case FormatACO:
+		return renderACO(p), nil
 	}
 	return nil, fmt.Errorf("%w: %q", ErrUnknownFormat, format)
 }
 
 // IsBinary reports whether a Format renders to binary bytes rather than
-// text. Only the image formats (PNG / JPEG) are binary; every other
-// format is UTF-8 text. Callers that must encode the output for a text
-// transport (e.g. the JSON wire envelope) use this to decide on base64.
+// text. The image formats (PNG / JPEG) and the Adobe swatch formats
+// (ASE / ACO) are binary; every other format is UTF-8 text. Callers that
+// must encode the output for a text transport (e.g. the JSON wire
+// envelope) use this to decide on base64.
 func IsBinary(format Format) bool {
-	return format == FormatPNG || format == FormatJPEG
+	return format == FormatPNG || format == FormatJPEG ||
+		format == FormatASE || format == FormatACO
 }
 
 // FileExtension returns the conventional file extension for a Format,
@@ -179,6 +193,10 @@ func FileExtension(format Format) string {
 		return "png"
 	case FormatJPEG:
 		return "jpg"
+	case FormatASE:
+		return "ase"
+	case FormatACO:
+		return "aco"
 	}
 	return ""
 }
@@ -211,6 +229,10 @@ func FormatFromExtension(ext string) (Format, bool) {
 		return FormatPNG, true
 	case "jpg", "jpeg", ".jpg", ".jpeg":
 		return FormatJPEG, true
+	case "ase", ".ase":
+		return FormatASE, true
+	case "aco", ".aco":
+		return FormatACO, true
 	}
 	return "", false
 }

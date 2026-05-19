@@ -15,8 +15,8 @@ var stdinReader io.Reader = os.Stdin
 
 // errPartialFailure is the sentinel returned by commands that processed
 // some inputs successfully but had errors on others. The root command's
-// custom exit-code mapping will translate this to exit 2,
-// matching Pylette's convention. For now it just propagates as a normal
+// custom exit-code mapping will translate this to exit 2.
+// For now it just propagates as a normal
 // error so the command still exits non-zero.
 var errPartialFailure = errors.New("one or more inputs failed")
 
@@ -24,9 +24,8 @@ var errPartialFailure = errors.New("one or more inputs failed")
 // back to stdin when args is empty. Stdin is read line-by-line; comment
 // lines (#-only or //-prefixed) and blank lines are skipped.
 //
-// The "no args, read stdin" convention matches Pylette and feels natural
-// in pipelines (`cat colors.txt | huetension sort`). When args ARE given,
-// stdin is never read — the user's intent is unambiguous.
+// Feels natural in pipelines (`cat colors.txt | huetension sort`).
+// When args ARE given, stdin is never read — the user's intent is unambiguous.
 func collectColorInputs(args []string) ([]string, error) {
 	if len(args) > 0 {
 		return args, nil

@@ -53,8 +53,7 @@ var (
 )
 
 // Execute is the binary entry point. It parses os.Args, dispatches to the
-// matching subcommand, and exits with a status code matching Pylette's
-// convention:
+// matching subcommand:
 //
 //	0 — success
 //	1 — total failure (could not run, fatal error, single-input failure)

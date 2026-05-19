@@ -16,7 +16,7 @@ import (
 //	rgb(255 0 0 / 50%)
 //	hsl(120deg 50% 40%)
 //	oklch(0.6 0.18 280deg / 0.8)
-//	hls(0.33 0.5 1.0)        — Pylette / Python colorsys ordering
+//	hls(0.33 0.5 1.0)        — Python colorsys ordering
 func ParseCSS(s string) (Color, error) {
 	s = strings.TrimSpace(s)
 	open := strings.IndexByte(s, '(')

@@ -20,6 +20,8 @@ const FORMATS: { value: ExportFormat; label: string }[] = [
   { value: 'svg', label: 'SVG' },
   { value: 'png', label: 'PNG' },
   { value: 'jpeg', label: 'JPEG' },
+  { value: 'ase', label: 'ASE' },
+  { value: 'aco', label: 'ACO' },
 ];
 
 const workspace = useWorkspaceStore();
@@ -39,6 +41,11 @@ const errorMsg = ref<string | null>(null);
 const copied = ref(false);
 
 const isBinary = computed(() => blobUrl.value !== null);
+// Image binaries (png/jpeg) get a thumbnail preview; opaque binaries
+// (Adobe ase/aco) only offer a download.
+const isImage = computed(
+  () => isBinary.value && (format.value === 'png' || format.value === 'jpeg'),
+);
 const hasOutput = computed(() => content.value !== '' || blobUrl.value !== null);
 
 /** Swap in a new binary preview URL, revoking the previous one. */
@@ -158,12 +165,14 @@ function download(): void {
     </div>
 
     <img
-      v-if="isBinary"
+      v-if="isImage"
       class="thumb"
-      :class="{ placeholder: !blobUrl }"
       :src="blobUrl ?? ''"
       alt="exported palette preview"
     />
+    <div v-else-if="isBinary" class="output binary-note">
+      Binary swatch file ready — {{ filename }}
+    </div>
     <pre v-else class="output mono" :class="{ placeholder: !content }">{{
       content || (loading ? 'Generating…' : 'No output')
     }}</pre>
@@ -300,6 +309,15 @@ function download(): void {
 
 .thumb.placeholder {
   opacity: 0;
+}
+
+.binary-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--fg-2);
+  font-size: 11.5px;
 }
 
 .actions {

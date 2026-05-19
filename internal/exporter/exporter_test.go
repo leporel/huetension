@@ -308,6 +308,8 @@ func TestFormatFromExtension(t *testing.T) {
 		".jpeg": FormatJPEG,
 		"ggr":   FormatGGR,
 		".svg":  FormatSVG,
+		"ase":   FormatASE,
+		".aco":  FormatACO,
 	}
 	for ext, want := range cases {
 		got, ok := FormatFromExtension(ext)
