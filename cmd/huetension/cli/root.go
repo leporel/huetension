@@ -86,6 +86,7 @@ func newRootCmd() *cobra.Command {
 	cobra.OnInitialize(initConfig)
 
 	root.AddCommand(newExtractCmd())
+	root.AddCommand(newAnalyzeCmd())
 	root.AddCommand(newHarmonyCmd())
 	root.AddCommand(newGradientCmd())
 	root.AddCommand(newContrastCmd())

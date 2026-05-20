@@ -1,19 +1,43 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>huetension — web UI (placeholder)</title>
-    <style>
-      body { font: 14px system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem; color: #1a1a1a; }
-      code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; }
-      h1 { margin-bottom: 0.25rem; }
-      p { line-height: 1.6; }
-    </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <title>huetension</title>
+    <script>
+      // Resolve the persisted theme before first paint so reloads don't
+      // flash the wrong tokens. Keeps the runtime store as the single
+      // source of truth; this script only seeds the initial attribute.
+      // useStorage (vueuse) writes raw strings for string defaults, so
+      // localStorage holds 'light' / 'dark' / 'system' verbatim.
+      (function () {
+        try {
+          var stored = localStorage.getItem('huetension:theme');
+          var resolved;
+          if (stored === 'light' || stored === 'dark') {
+            resolved = stored;
+          } else {
+            resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', resolved);
+        } catch (_e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-4ouGQNal.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/workspace-CWFOfyRq.js">
+    <link rel="modulepreload" crossorigin href="/assets/theme-jwQ1Ps08.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-CNLFzQkl.css">
   </head>
   <body>
-    <h1>huetension</h1>
-    <p>Web UI placeholder. The Vue SPA is delivered in Phase 3 slice S4+.</p>
-    <p>REST API is live under <code>/api/v1</code>. Try <code>GET /api/v1/color/convert?color=%23336699</code>.</p>
+    <div id="app"></div>
   </body>
 </html>

@@ -22,6 +22,7 @@ package huetension
 import (
 	"context"
 
+	"github.com/leporel/huetension/internal/analyze"
 	"github.com/leporel/huetension/internal/blindness"
 	"github.com/leporel/huetension/internal/color"
 	"github.com/leporel/huetension/internal/contrast"
@@ -220,4 +221,30 @@ var (
 	AllExportFormats = exporter.AllFormats
 	Export           = exporter.Export
 	FileExtension    = exporter.FileExtension
+)
+
+// Image analysis surface — render four colour-distribution strips
+// (hue / luminance / saturation / distance) for an image.
+type (
+	AnalyzeOptions        = analyze.Options
+	AnalyzeResult         = analyze.Result
+	AnalyzeStrip          = analyze.Strip
+	AnalyzeMetric         = analyze.Metric
+	AnalyzeDistanceTarget = analyze.DistanceTarget
+	AnalyzeSpace          = analyze.Space
+)
+
+const (
+	MetricHue          = analyze.MetricHue
+	MetricLuminance    = analyze.MetricLuminance
+	MetricSaturation   = analyze.MetricSaturation
+	MetricDistance     = analyze.MetricDistance
+	AnalyzeSpaceOkLCH  = analyze.SpaceOkLCH
+	AnalyzeSpaceHSL    = analyze.SpaceHSL
+)
+
+var (
+	AnalyzeStrips      = analyze.Strips
+	AnalyzeAllMetrics  = analyze.AllMetrics
+	AnalyzeCombinePNGs = analyze.Combined
 )

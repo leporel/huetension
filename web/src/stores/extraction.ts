@@ -19,6 +19,12 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import type { ColorJSON, PaletteMetadata } from '../api/types';
+import type {
+  AnalyzeDistanceTarget,
+  AnalyzeMetric,
+  AnalyzeSpace,
+  AnalyzeStrip,
+} from '../api/analyze';
 
 export type ImageSourceKind = 'file' | 'url' | 'data';
 
@@ -30,6 +36,11 @@ export interface ExtractionImage {
   naturalHeight: number;
 }
 
+/** Strips are keyed by metric so the template can look one up without
+ *  scanning an array. Populated from `/analyze` once per new image; the
+ *  image-card strip row reads from this map. */
+export type StripMap = Partial<Record<AnalyzeMetric, AnalyzeStrip>>;
+
 export const useExtractionStore = defineStore('extraction', () => {
   const image = ref<ExtractionImage | null>(null);
   const metadata = ref<PaletteMetadata | null>(null);
@@ -40,6 +51,18 @@ export const useExtractionStore = defineStore('extraction', () => {
    *  this once the user drags pins or edits hex); this snapshot stays
    *  pinned to the extraction moment. */
   const lastPalette = ref<ColorJSON[]>([]);
+  /** Colour-distribution strips for the current image. Cleared whenever
+   *  a new image starts loading and repopulated when `/analyze` resolves;
+   *  method/preset re-extractions do NOT touch it (the strips depend only
+   *  on pixels, not on the chosen palette algorithm). */
+  const strips = ref<StripMap>({});
+  /** Colour space the strip-row selectors are set to. Persists across
+   *  re-extractions (the analysis controls live in the image card and
+   *  shouldn't reset when the method changes). */
+  const analyzeSpace = ref<AnalyzeSpace>('oklch');
+  /** Distance-target primary the distance strip ranks against. Persists
+   *  across re-extractions for the same reason as analyzeSpace. */
+  const analyzeDistanceTarget = ref<AnalyzeDistanceTarget>('blue');
 
   function setImage(next: ExtractionImage | null) {
     // Revoke the previous blob URL to avoid leaking memory; raw URLs
@@ -63,11 +86,30 @@ export const useExtractionStore = defineStore('extraction', () => {
     lastPalette.value = p;
   }
 
+  function setStrips(s: AnalyzeStrip[]) {
+    const next: StripMap = {};
+    for (const strip of s) next[strip.metric] = strip;
+    strips.value = next;
+  }
+
+  function clearStrips() {
+    strips.value = {};
+  }
+
+  function setAnalyzeSpace(s: AnalyzeSpace) {
+    analyzeSpace.value = s;
+  }
+
+  function setAnalyzeDistanceTarget(t: AnalyzeDistanceTarget) {
+    analyzeDistanceTarget.value = t;
+  }
+
   function clear() {
     setImage(null);
     setMetadata(null);
     setLastFile(null);
     setLastPalette([]);
+    clearStrips();
   }
 
   return {
@@ -75,10 +117,17 @@ export const useExtractionStore = defineStore('extraction', () => {
     metadata,
     lastFile,
     lastPalette,
+    strips,
+    analyzeSpace,
+    analyzeDistanceTarget,
     setImage,
     setMetadata,
     setLastFile,
     setLastPalette,
+    setStrips,
+    clearStrips,
+    setAnalyzeSpace,
+    setAnalyzeDistanceTarget,
     clear,
   };
 });

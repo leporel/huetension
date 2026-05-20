@@ -41,6 +41,7 @@ func registerAPI(mux *http.ServeMux, base string, deps apiHandlers) {
 	mux.HandleFunc("POST "+base+"/export", handleExport)
 	mux.HandleFunc("POST "+base+"/blindness/simulate", handleBlindnessSimulate)
 	mux.HandleFunc("POST "+base+"/extract", deps.handleExtract)
+	mux.HandleFunc("POST "+base+"/analyze", deps.handleAnalyze)
 	registerLibrary(mux, base, deps.library)
 }
 
