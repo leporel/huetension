@@ -137,6 +137,34 @@ func parseOkLCHFn(args, full string) (Color, error) {
 	return Color{R: toUint8(r * 255), G: toUint8(g * 255), B: toUint8(bb * 255), A: alpha}, nil
 }
 
+// ToOkLab returns raw OkLab (L 0..1, a/b roughly ±0.4). Alpha is ignored.
+func (c Color) ToOkLab() (L, a, b float64) {
+	return rgbToOkLab(float64(c.R)/255, float64(c.G)/255, float64(c.B)/255)
+}
+
+// ToOkLCH returns raw OkLCH (L 0..1, C 0..0.4, H degrees in [0, 360)).
+// Alpha is ignored.
+func (c Color) ToOkLCH() (L, C, H float64) {
+	L, a, b := c.ToOkLab()
+	_, C, H = okLabToLCH(L, a, b)
+	return L, C, H
+}
+
+// OkL returns the L component of OkLab in 0..1 — perceptually uniform,
+// preferred over Luminance() when ordering for designer-facing output.
+func (c Color) OkL() float64 {
+	L, _, _ := c.ToOkLab()
+	return L
+}
+
+// OkChroma returns the C component of OkLCH (perceptual chroma, ~0..0.4).
+// Useful as a perceptual replacement for HSL saturation in ranking and
+// filtering.
+func (c Color) OkChroma() float64 {
+	_, C, _ := c.ToOkLCH()
+	return C
+}
+
 // OkLab returns CSS oklab() notation.
 func (c Color) OkLab() string {
 	L, a, b := rgbToOkLab(float64(c.R)/255, float64(c.G)/255, float64(c.B)/255)

@@ -84,6 +84,12 @@ func parseLabL(s string) (float64, error) {
 	return v * 100, nil
 }
 
+// ToLab returns CSS-scaled CIE Lab: L 0..100, a/b roughly ±125.
+func (c Color) ToLab() (L, a, b float64) {
+	cl, ca, cb := c.toColorful().Lab()
+	return cl * labScale, ca * labScale, cb * labScale
+}
+
 // Lab returns CSS lab() notation.
 func (c Color) Lab() string {
 	l, a, b := c.toColorful().Lab()

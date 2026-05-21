@@ -12,6 +12,7 @@ import { useWorkspaceStore, type WorkspaceSlot } from '../stores/workspace';
 import { useExtractionStore } from '../stores/extraction';
 import { useHarmonyStore } from '../stores/harmony';
 import type { ColorJSON } from '../api/types';
+import ImagePickerModal from './ImagePickerModal.vue';
 
 const workspace = useWorkspaceStore();
 const extraction = useExtractionStore();
@@ -61,36 +62,10 @@ function currentOpts(): ExtractOptions {
 
 const loading = ref(false);
 const errorMsg = ref<string | null>(null);
+const pickerOpen = ref(false);
 
-const fileInput = ref<HTMLInputElement | null>(null);
-const dragOver = ref(false);
-
-function onPickClick() {
-  fileInput.value?.click();
-}
-
-function onFileChange(e: Event) {
-  const t = e.target as HTMLInputElement;
-  const f = t.files?.[0];
-  if (f) void runFileExtract(f);
-  // Reset so the same file can be re-uploaded after extraction tweaks.
-  t.value = '';
-}
-
-function onDrop(e: DragEvent) {
-  e.preventDefault();
-  dragOver.value = false;
-  const f = e.dataTransfer?.files?.[0];
-  if (f) void runFileExtract(f);
-}
-
-function onDragOver(e: DragEvent) {
-  e.preventDefault();
-  dragOver.value = true;
-}
-
-function onDragLeave() {
-  dragOver.value = false;
+function onPickerPicked(file: File): void {
+  void runFileExtract(file);
 }
 
 async function loadImageNaturalSize(url: string): Promise<{ w: number; h: number }> {
@@ -314,40 +289,44 @@ onBeforeUnmount(() => document.removeEventListener('paste', onPaste));
 
 <template>
   <div class="extractor">
-    <div
-      class="dropzone"
-      :class="{ dragover: dragOver, loading }"
-      @dragover="onDragOver"
-      @dragleave="onDragLeave"
-      @drop="onDrop"
-      @click="onPickClick"
-    >
-      <input
-        ref="fileInput"
-        type="file"
-        accept="image/*"
-        hidden
-        @change="onFileChange"
-      />
-      <div v-if="!extraction.image" class="dz-empty">
+    <template v-if="!extraction.image">
+      <button
+        type="button"
+        class="pick-btn"
+        :disabled="loading"
+        @click="pickerOpen = true"
+      >
         <svg
           viewBox="0 0 24 24"
-          width="22"
-          height="22"
+          width="16"
+          height="16"
           fill="none"
           stroke="currentColor"
-          stroke-width="1.6"
+          stroke-width="1.8"
+          aria-hidden="true"
         >
           <path d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" />
         </svg>
-        <div class="dz-title">Drop, paste, or click to upload an image</div>
-        <div class="dz-sub mono">PNG · JPG · WebP · GIF · ⌃V to paste</div>
-      </div>
-      <div v-else class="dz-preview">
-        <img :src="extraction.image.url" alt="extraction source" />
-        <div class="dz-overlay mono">replace</div>
-      </div>
-    </div>
+        <span>Load image</span>
+      </button>
+    </template>
+    <button
+      v-else
+      type="button"
+      class="pick-preview"
+      :class="{ loading }"
+      :disabled="loading"
+      @click="pickerOpen = true"
+    >
+      <img :src="extraction.image.url" alt="extraction source" />
+      <span class="pick-preview-overlay mono">replace</span>
+    </button>
+
+    <ImagePickerModal
+      v-model:open="pickerOpen"
+      title="From image"
+      @pick="onPickerPicked"
+    />
 
     <div class="controls">
       <label class="fld">
@@ -405,61 +384,70 @@ onBeforeUnmount(() => document.removeEventListener('paste', onPaste));
   gap: 10px;
 }
 
-.dropzone {
-  position: relative;
-  height: 160px;
-  border: 1px dashed var(--line);
-  border-radius: var(--r-md);
-  background: var(--bg-2);
-  display: flex;
+/* "From image" trigger — opens the ImagePickerModal. Two states: a
+ * plain button when no image is loaded, and a preview-thumbnail button
+ * (with a "replace" overlay on hover) once one is. Both share the
+ * disabled-during-loading dim. */
+.pick-btn {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-0);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
   cursor: pointer;
-  overflow: hidden;
 }
 
-.dropzone.dragover {
+.pick-btn:hover:not(:disabled),
+.pick-btn:focus-visible {
   border-color: var(--accent);
   background: var(--accent-soft);
+  outline: none;
 }
 
-.dropzone.loading {
+.pick-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pick-preview {
+  position: relative;
+  width: 100%;
+  height: 160px;
+  padding: 0;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.pick-preview:hover:not(:disabled),
+.pick-preview:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.pick-preview.loading {
   opacity: 0.6;
   pointer-events: none;
 }
 
-.dz-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  color: var(--fg-2);
-}
-
-.dz-title {
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.dz-sub {
-  font-size: 10.5px;
-  color: var(--fg-3);
-}
-
-.dz-preview {
-  width: 100%;
-  height: 100%;
-  position: relative;
-}
-
-.dz-preview img {
+.pick-preview img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.dz-overlay {
+.pick-preview-overlay {
   position: absolute;
   right: 8px;
   bottom: 8px;
@@ -470,6 +458,13 @@ onBeforeUnmount(() => document.removeEventListener('paste', onPaste));
   font-size: 10.5px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.pick-preview:hover .pick-preview-overlay,
+.pick-preview:focus-visible .pick-preview-overlay {
+  opacity: 1;
 }
 
 /* Single column: the controls sit in a narrow (~220px) slot, too tight

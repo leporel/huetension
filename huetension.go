@@ -31,6 +31,7 @@ import (
 	"github.com/leporel/huetension/internal/gradient"
 	"github.com/leporel/huetension/internal/harmony"
 	"github.com/leporel/huetension/internal/imageio"
+	"github.com/leporel/huetension/internal/lut"
 	"github.com/leporel/huetension/internal/palette"
 )
 
@@ -247,4 +248,16 @@ var (
 	AnalyzeStrips      = analyze.Strips
 	AnalyzeAllMetrics  = analyze.AllMetrics
 	AnalyzeCombinePNGs = analyze.Combined
+)
+
+// LUT surface — 3D color-grading lookup tables in Cube and HALD PNG formats.
+type (
+	LUT        = lut.LUT
+	LUTOptions = lut.Options
+)
+
+var (
+	GenerateLUT  = lut.Generate
+	EncodeCube   = lut.EncodeCube
+	EncodeHaldPNG = lut.EncodeHaldPNG
 )

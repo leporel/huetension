@@ -109,6 +109,15 @@ func parseAlphaToken(s string) (uint8, error) {
 	return toUint8(v * 255), nil
 }
 
+// modAngle normalises a hue in degrees into [0, 360).
+func modAngle(h float64) float64 {
+	h = h - 360*float64(int(h/360))
+	if h < 0 {
+		h += 360
+	}
+	return h
+}
+
 // parseHue reads a hue in degrees (default), turns, radians, or grads.
 // Result is normalized to [0, 360).
 func parseHue(s string) (float64, error) {

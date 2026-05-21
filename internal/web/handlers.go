@@ -39,6 +39,8 @@ func registerAPI(mux *http.ServeMux, base string, deps apiHandlers) {
 	mux.HandleFunc("GET "+base+"/contrast", handleContrastCheck)
 	mux.HandleFunc("GET "+base+"/random", handlePaletteRandom)
 	mux.HandleFunc("POST "+base+"/export", handleExport)
+	mux.HandleFunc("POST "+base+"/lut", handleLUT)
+	mux.HandleFunc("POST "+base+"/apply-lut", deps.handleApplyLUT)
 	mux.HandleFunc("POST "+base+"/blindness/simulate", handleBlindnessSimulate)
 	mux.HandleFunc("POST "+base+"/extract", deps.handleExtract)
 	mux.HandleFunc("POST "+base+"/analyze", deps.handleAnalyze)
