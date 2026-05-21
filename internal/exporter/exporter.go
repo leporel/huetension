@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/leporel/huetension/internal/color"
 	"github.com/leporel/huetension/internal/palette"
 )
 
@@ -103,12 +104,28 @@ type Options struct {
 	// input shape). 5 → 100/300/500/700/900; 10 → 50/100/200..900; any other
 	// N → linear 100..N00. Ignored for non-tailwind formats.
 	TailwindShades int
+
+	// ColorNotation selects how colors are formatted in text-based exports
+	// (CSS, SCSS, LESS, Tailwind, Plain). Empty string defaults to hex.
+	ColorNotation color.Format
 }
 
 const (
 	defaultPrefix = "color"
 	defaultName   = "huetension"
 )
+
+// colorValue formats c using opts.ColorNotation; falls back to hex on error or empty notation.
+func colorValue(c color.Color, opts Options) string {
+	if opts.ColorNotation == "" {
+		return c.Hex()
+	}
+	v, err := c.Format(opts.ColorNotation)
+	if err != nil {
+		return c.Hex()
+	}
+	return v
+}
 
 // ErrUnknownFormat is returned by Export when the supplied Format is not
 // in AllFormats.
@@ -138,7 +155,7 @@ func Export(p *palette.Palette, format Format, opts Options) ([]byte, error) {
 	case FormatTailwind:
 		return renderTailwind(p, opts)
 	case FormatPlain:
-		return renderPlain(p), nil
+		return renderPlain(p, opts), nil
 	case FormatGPL:
 		return renderGPL(p, opts), nil
 	case FormatGGR:

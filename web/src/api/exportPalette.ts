@@ -23,6 +23,8 @@ export interface ExportRequest {
   name?: string;
   /** Shade-scale count; only meaningful for format=tailwind. */
   shades?: number;
+  /** Color value notation (hex, hex-upper, rgb, hsl, hsv, oklab, oklch); only for text formats. */
+  notation?: string;
 }
 
 /** POST /api/v1/export — render a color list into any exporter format.

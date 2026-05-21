@@ -13,9 +13,10 @@ import (
 )
 
 type tailwindFlags struct {
-	name   string
-	shades string
-	output string
+	name     string
+	shades   string
+	notation string
+	output   string
 }
 
 func newTailwindCmd() *cobra.Command {
@@ -41,6 +42,7 @@ func newTailwindCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&tf.name, "name", "color", "color group name prefix")
 	cmd.Flags().StringVar(&tf.shades, "shades", "none", "shade expansion (none|auto|5|10|N)")
+	cmd.Flags().StringVar(&tf.notation, "notation", "", "color value notation (hex|hex-upper|rgb|hsl|hsv|oklab|oklch); default hex")
 	cmd.Flags().StringVarP(&tf.output, "output", "o", "-", "output file path; use \"-\" for stdout")
 
 	return cmd
@@ -71,6 +73,7 @@ func runTailwind(args []string, tf *tailwindFlags) error {
 		Prefix:         tf.name,
 		Name:           tf.name,
 		TailwindShades: shadeCount,
+		ColorNotation:  color.Format(tf.notation),
 	})
 	if err != nil {
 		return err

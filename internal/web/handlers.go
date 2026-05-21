@@ -397,11 +397,12 @@ var exportFormats = func() map[exporter.Format]bool {
 }()
 
 type exportRequest struct {
-	Format string   `json:"format"`
-	Colors []string `json:"colors"`
-	Name   string   `json:"name,omitempty"`
-	Kind   string   `json:"kind,omitempty"`
-	Shades int      `json:"shades,omitempty"`
+	Format   string   `json:"format"`
+	Colors   []string `json:"colors"`
+	Name     string   `json:"name,omitempty"`
+	Kind     string   `json:"kind,omitempty"`
+	Shades   int      `json:"shades,omitempty"`
+	Notation string   `json:"notation,omitempty"`
 }
 
 type exportResult struct {
@@ -470,6 +471,7 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 		Prefix:         name,
 		Name:           name,
 		TailwindShades: req.Shades,
+		ColorNotation:  color.Format(strings.TrimSpace(req.Notation)),
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)

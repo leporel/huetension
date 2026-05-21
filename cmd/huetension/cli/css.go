@@ -12,9 +12,10 @@ import (
 )
 
 type cssFlags struct {
-	kind   string
-	name   string
-	output string
+	kind     string
+	name     string
+	notation string
+	output   string
 }
 
 func newCSSCmd() *cobra.Command {
@@ -37,6 +38,7 @@ func newCSSCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&cf.kind, "kind", "vars", "stylesheet dialect (vars|scss|less)")
 	cmd.Flags().StringVar(&cf.name, "name", "color", "variable name prefix")
+	cmd.Flags().StringVar(&cf.notation, "notation", "", "color value notation (hex|hex-upper|rgb|hsl|hsv|oklab|oklch); default hex")
 	cmd.Flags().StringVarP(&cf.output, "output", "o", "-", "output file path; use \"-\" for stdout")
 
 	return cmd
@@ -64,8 +66,9 @@ func runCSS(args []string, cf *cssFlags) error {
 	p := palette.New(colors)
 	p.Name = cf.name
 	data, err := exporter.Export(p, format, exporter.Options{
-		Prefix: cf.name,
-		Name:   cf.name,
+		Prefix:        cf.name,
+		Name:          cf.name,
+		ColorNotation: color.Format(cf.notation),
 	})
 	if err != nil {
 		return err

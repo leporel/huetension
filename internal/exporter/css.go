@@ -15,7 +15,7 @@ func renderCSS(p *palette.Palette, opts Options) []byte {
 	var buf bytes.Buffer
 	buf.WriteString(":root {\n")
 	for i, c := range p.Colors {
-		fmt.Fprintf(&buf, "  --%s-%d: %s;\n", opts.Prefix, i+1, c.Hex())
+		fmt.Fprintf(&buf, "  --%s-%d: %s;\n", opts.Prefix, i+1, colorValue(c, opts))
 	}
 	buf.WriteString("}\n")
 	return buf.Bytes()

@@ -16,7 +16,7 @@ import (
 //
 // Two shapes:
 //   - flat (opts.TailwindShades == 0): one entry per input color
-//     "brand-1": "#aabbcc", "brand-2": "#ddeeff", …
+//     "brand-1": "<color>", "brand-2": "<color>", …
 //   - shade-scale (opts.TailwindShades > 0): each input expands into a nested
 //     scale of monochromatic variants keyed by Tailwind shade numbers
 //     "brand-1": { "100": …, "500": …, "900": … }
@@ -25,13 +25,13 @@ import (
 // color); flat mode is infallible.
 func renderTailwind(p *palette.Palette, opts Options) ([]byte, error) {
 	if opts.TailwindShades > 0 {
-		return renderTailwindShades(p.Colors, opts.Prefix, TailwindShadeStops(opts.TailwindShades))
+		return renderTailwindShades(p.Colors, opts.Prefix, TailwindShadeStops(opts.TailwindShades), opts)
 	}
 	var buf bytes.Buffer
 	buf.WriteString("// huetension palette — paste into tailwind.config.js theme.extend.colors\n")
 	buf.WriteString("module.exports = {\n")
 	for i, c := range p.Colors {
-		fmt.Fprintf(&buf, "  %q: %q,\n", fmt.Sprintf("%s-%d", opts.Prefix, i+1), c.Hex())
+		fmt.Fprintf(&buf, "  %q: %q,\n", fmt.Sprintf("%s-%d", opts.Prefix, i+1), colorValue(c, opts))
 	}
 	buf.WriteString("};\n")
 	return buf.Bytes(), nil
@@ -58,7 +58,7 @@ func TailwindShadeStops(count int) []int {
 // monochromatic variants, sorts them lightest→darkest to match the Tailwind
 // convention (50 = lightest, 900 = darkest), and emits a nested-shape
 // module.exports object.
-func renderTailwindShades(colors []color.Color, prefix string, stops []int) ([]byte, error) {
+func renderTailwindShades(colors []color.Color, prefix string, stops []int, opts Options) ([]byte, error) {
 	count := len(stops)
 	type group struct {
 		name   string
@@ -76,7 +76,7 @@ func renderTailwindShades(colors []color.Color, prefix string, stops []int) ([]b
 		})
 		shadeMap := make(map[int]string, count)
 		for j, v := range variants {
-			shadeMap[stops[j]] = v.Hex()
+			shadeMap[stops[j]] = colorValue(v, opts)
 		}
 		groups[i] = group{
 			name:   fmt.Sprintf("%s-%d", prefix, i+1),
