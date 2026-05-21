@@ -25,12 +25,20 @@ import (
 type lutRequest struct {
 	Colors            []string        `json:"colors"`
 	Format            string          `json:"format"`
-	Radius            float64         `json:"radius"`
-	Distribution      float64         `json:"distribution"`
-	Intensity         float64         `json:"intensity"`
-	BlendNeighbors    int             `json:"blend_neighbors"`
+	Method            string          `json:"method,omitempty"` // "knn" (legacy default) | "rbf" (smooth)
 	IncludeSaturation bool            `json:"include_saturation"`
 	Size              json.RawMessage `json:"size,omitempty"`
+
+	// K-NN knobs.
+	Radius         float64 `json:"radius"`
+	Distribution   float64 `json:"distribution"`
+	Intensity      float64 `json:"intensity"`
+	BlendNeighbors int     `json:"blend_neighbors"`
+
+	// RBF knobs.
+	Reach     float64 `json:"reach,omitempty"`
+	Sharpness float64 `json:"sharpness,omitempty"`
+	Strength  float64 `json:"strength,omitempty"`
 }
 
 // lutResult mirrors exportResult shape — raw text for `cube`, base64 for
@@ -61,19 +69,9 @@ func handleLUT(w http.ResponseWriter, r *http.Request) {
 			fmt.Errorf("format: unknown %q (want cube|png)", req.Format))
 		return
 	}
-	if math.IsNaN(req.Radius) || math.IsInf(req.Radius, 0) || req.Radius < 0 {
-		writeError(w, http.StatusBadRequest,
-			fmt.Errorf("radius: must be a finite value ≥ 0, got %v", req.Radius))
-		return
-	}
-	if req.Distribution < 0 || req.Distribution > 1 {
-		writeError(w, http.StatusBadRequest,
-			fmt.Errorf("distribution: must be in [0, 1], got %v", req.Distribution))
-		return
-	}
-	if req.Intensity < 0 || req.Intensity > 1 {
-		writeError(w, http.StatusBadRequest,
-			fmt.Errorf("intensity: must be in [0, 1], got %v", req.Intensity))
+	method := normaliseLUTMethod(req.Method)
+	if err := validateLUTMethodParams(method, req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -102,11 +100,15 @@ func handleLUT(w http.ResponseWriter, r *http.Request) {
 	pal := palette.New(colors)
 	generated, err := lut.Generate(pal, lut.Options{
 		Size:              lutSize,
+		Method:            method,
+		IncludeSaturation: req.IncludeSaturation,
 		Radius:            req.Radius,
 		Distribution:      req.Distribution,
 		Intensity:         req.Intensity,
 		BlendNeighbors:    blend,
-		IncludeSaturation: req.IncludeSaturation,
+		Reach:             req.Reach,
+		Sharpness:         req.Sharpness,
+		Strength:          req.Strength,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -138,14 +140,67 @@ func handleLUT(w http.ResponseWriter, r *http.Request) {
 	params := map[string]any{
 		"colors":             req.Colors,
 		"format":             format,
+		"method":             method,
 		"size":               lutSize,
-		"radius":             req.Radius,
-		"distribution":       req.Distribution,
-		"intensity":          req.Intensity,
-		"blend_neighbors":    blend,
 		"include_saturation": req.IncludeSaturation,
 	}
+	if method == lut.MethodKNN {
+		params["radius"] = req.Radius
+		params["distribution"] = req.Distribution
+		params["intensity"] = req.Intensity
+		params["blend_neighbors"] = blend
+	} else {
+		params["reach"] = req.Reach
+		params["sharpness"] = req.Sharpness
+		params["strength"] = req.Strength
+	}
 	writeEnvelope(w, "lut.generate", params, res)
+}
+
+// normaliseLUTMethod maps the wire `method` field to the canonical
+// algorithm constant. Empty / unrecognised values resolve to "knn" so
+// older clients keep producing the legacy output.
+func normaliseLUTMethod(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", lut.MethodKNN:
+		return lut.MethodKNN
+	case lut.MethodRBF:
+		return lut.MethodRBF
+	}
+	// Unrecognised → fall back to the safe legacy default rather than
+	// 400-ing; the algorithm dispatcher will reject any genuinely
+	// invalid value at Generate time.
+	return lut.MethodKNN
+}
+
+// validateLUTMethodParams enforces the per-method knob ranges. The
+// dispatcher in lut.Generate also validates, but doing it here lets us
+// return a 400 with the offending field name rather than letting the
+// algorithm-side error bubble up under the same status code.
+func validateLUTMethodParams(method string, req lutRequest) error {
+	switch method {
+	case lut.MethodKNN:
+		if math.IsNaN(req.Radius) || math.IsInf(req.Radius, 0) || req.Radius < 0 {
+			return fmt.Errorf("radius: must be a finite value ≥ 0, got %v", req.Radius)
+		}
+		if req.Distribution < 0 || req.Distribution > 1 {
+			return fmt.Errorf("distribution: must be in [0, 1], got %v", req.Distribution)
+		}
+		if req.Intensity < 0 || req.Intensity > 1 {
+			return fmt.Errorf("intensity: must be in [0, 1], got %v", req.Intensity)
+		}
+	case lut.MethodRBF:
+		if math.IsNaN(req.Reach) || math.IsInf(req.Reach, 0) || req.Reach <= 0 {
+			return fmt.Errorf("reach: must be a finite value > 0, got %v", req.Reach)
+		}
+		if math.IsNaN(req.Sharpness) || math.IsInf(req.Sharpness, 0) || req.Sharpness <= 0 {
+			return fmt.Errorf("sharpness: must be a finite value > 0, got %v", req.Sharpness)
+		}
+		if req.Strength < 0 || req.Strength > 1 {
+			return fmt.Errorf("strength: must be in [0, 1], got %v", req.Strength)
+		}
+	}
+	return nil
 }
 
 // resolveLUTSize accepts either a JSON integer or a named preset string.

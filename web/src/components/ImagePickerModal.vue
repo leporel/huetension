@@ -77,6 +77,7 @@ function onPaste(e: ClipboardEvent): void {
   if (!items) return;
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
+    if (!item) continue;
     if (item.kind === 'file' && item.type.startsWith('image/')) {
       const file = item.getAsFile();
       if (file) {

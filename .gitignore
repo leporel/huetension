@@ -1,5 +1,6 @@
 .prompts/
 .refs/
+.claude/settings.local.json
 
 # Build artifacts
 /dist/

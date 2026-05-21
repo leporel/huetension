@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import CardFrame from "../components/CardFrame.vue";
 import ColorWheel from "../components/ColorWheel.vue";
@@ -37,6 +37,98 @@ const workspace = useWorkspaceStore();
 const harmony = useHarmonyStore();
 const extraction = useExtractionStore();
 const route = useRoute();
+
+// Pin toggle for the Color wheel card — keeps the wheel in view as the
+// user scrolls through the long tools page. Local UI state, never
+// persisted: pinning is meant to be a transient assist while editing.
+const wheelPinned = ref(false);
+
+// Position of the pinned card in viewport coordinates. `null` until the
+// user drags it for the first time — until then the default CSS anchor
+// (top-right under the topbar) applies. Set once and then kept until
+// the user reloads or unpins+repins.
+const wheelPinPos = ref<{ x: number; y: number } | null>(null);
+
+// Pointer-drag wiring for the pinned card. The handler is attached to
+// CardFrame's root via fallthrough listeners and only acts when the
+// pointerdown originated inside `.card-h` (the title strip) — clicks on
+// the pin button or any other interactive control inside the header are
+// ignored so they keep their normal behaviour.
+let drag: {
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+} | null = null;
+
+function onWheelCardPointerDown(e: PointerEvent) {
+    if (!wheelPinned.value) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest("button, input, select, textarea, a")) return;
+    const header = target.closest(".card-h") as HTMLElement | null;
+    if (!header) return;
+    const card = header.parentElement as HTMLElement | null;
+    if (!card) return;
+
+    // Initialise position from the rendered rect on the first drag —
+    // matches whatever the default anchor produced so the card doesn't
+    // jump under the cursor.
+    if (!wheelPinPos.value) {
+        const r = card.getBoundingClientRect();
+        wheelPinPos.value = { x: r.left, y: r.top };
+    }
+
+    drag = {
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: wheelPinPos.value.x,
+        origY: wheelPinPos.value.y,
+    };
+    e.preventDefault();
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp, { once: true });
+    window.addEventListener("pointercancel", onPointerUp, { once: true });
+    document.body.style.userSelect = "none";
+}
+
+function onPointerMove(e: PointerEvent) {
+    if (!drag || !wheelPinPos.value) return;
+    const cardEl = document.getElementById("wheel");
+    const w = cardEl?.offsetWidth ?? 360;
+    const h = cardEl?.offsetHeight ?? 0;
+    const x = Math.max(
+        0,
+        Math.min(window.innerWidth - w, drag.origX + e.clientX - drag.startX),
+    );
+    const y = Math.max(
+        0,
+        Math.min(
+            Math.max(0, window.innerHeight - h),
+            drag.origY + e.clientY - drag.startY,
+        ),
+    );
+    wheelPinPos.value = { x, y };
+}
+
+function onPointerUp() {
+    drag = null;
+    window.removeEventListener("pointermove", onPointerMove);
+    document.body.style.userSelect = "";
+}
+
+// Compute the inline style for the pinned card. While dragging (or after
+// the first drag) we anchor by left/top and release the default right
+// anchor; until then we leave styling to the `.pinned-card` CSS rule.
+const wheelCardStyle = computed(() => {
+    if (!wheelPinned.value || !wheelPinPos.value) return undefined;
+    return {
+        left: `${wheelPinPos.value.x}px`,
+        top: `${wheelPinPos.value.y}px`,
+        right: "auto",
+    };
+});
 
 const base = computed(() => {
     // The Harmony card's read-out always tracks the wheel-selected slot, so
@@ -123,7 +215,37 @@ watch(
             title="Color wheel"
             :sub="`${harmony.type} · ${workspace.size} slots`"
             class="col-2"
+            :class="{ 'pinned-card': wheelPinned }"
+            :style="wheelCardStyle"
+            @pointerdown="onWheelCardPointerDown"
         >
+            <template #header-right>
+                <button
+                    type="button"
+                    class="pin-btn"
+                    :class="{ active: wheelPinned }"
+                    :aria-pressed="wheelPinned"
+                    :title="wheelPinned ? 'Unpin Color wheel' : 'Pin Color wheel to stay visible while scrolling'"
+                    @click="wheelPinned = !wheelPinned"
+                >
+                    <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <path d="M12 17v5" />
+                        <path
+                            d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.89A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.89A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+                        />
+                    </svg>
+                </button>
+            </template>
             <div class="wheel-host">
                 <ColorWheel />
             </div>
@@ -314,6 +436,87 @@ watch(
     display: flex;
     justify-content: center;
     margin-bottom: 8px;
+}
+
+/* Pin toggle in the wheel card header — small icon button that flips
+   the card into a viewport-fixed overlay so it remains reachable while
+   scrolling through the long tools page. */
+.pin-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--fg-3);
+    cursor: pointer;
+    transition:
+        color 0.12s ease,
+        background 0.12s ease,
+        border-color 0.12s ease,
+        transform 0.12s ease;
+}
+
+.pin-btn:hover {
+    color: var(--fg-0);
+    background: var(--bg-2);
+    border-color: var(--line-soft);
+}
+
+.pin-btn.active {
+    color: var(--accent);
+    background: var(--bg-2);
+    border-color: var(--line);
+    transform: rotate(-30deg);
+}
+
+/* When pinned the wheel card floats over the page, anchored to the
+   top-right under the 52px sticky topbar. It vacates its grid track —
+   neighbouring cards reflow up. Scrollable internally in case the
+   viewport is short. */
+.pinned-card {
+    position: fixed;
+    top: 64px;
+    right: 14px;
+    width: 360px;
+    max-height: calc(100vh - 78px);
+    overflow: auto;
+    z-index: 40;
+    box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.35),
+        0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* Drag affordance on the title strip while pinned. `:deep` pierces
+   CardFrame's scoped styles so the cursor change reaches `.card-h`,
+   which is owned by that child component. */
+.pinned-card :deep(.card-h) {
+    cursor: grab;
+}
+
+.pinned-card :deep(.card-h):active {
+    cursor: grabbing;
+}
+
+/* The pin button inside the header should keep a pointer cursor — it's
+   a click target, not a drag handle. */
+.pinned-card :deep(.card-h) .pin-btn,
+.pinned-card :deep(.card-h) .pin-btn:active {
+    cursor: pointer;
+}
+
+@media (max-width: 1100px) {
+    /* On the single-column layout pinning would cover most of the
+       screen — disable so the card behaves like every other one. */
+    .pinned-card {
+        position: static;
+        width: auto;
+        max-height: none;
+        box-shadow: var(--shadow-card);
+    }
 }
 
 /* Gesture legend for the wheel — mirrors the modifiers

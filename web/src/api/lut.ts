@@ -4,18 +4,33 @@ import { api, type RequestOptions } from './client';
  *  HALD CLUT image (base64-encoded). */
 export type LutFormat = 'cube' | 'png';
 
+/** LUT generation algorithm. `rbf` is the smooth default (Gaussian-like
+ *  kernel over every palette colour, blended in OkLab a/b); `knn` is the
+ *  legacy K-nearest path that takes radius/distribution/intensity/blend. */
+export type LutMethod = 'rbf' | 'knn';
+
 export interface LutRequest {
   colors: string[];
   format: LutFormat;
-  radius: number;
-  distribution: number;
-  intensity: number;
-  blend_neighbors: number;
+  /** Algorithm. Omit or `"knn"` for the legacy K-nearest path; `"rbf"`
+   *  for the smooth Gaussian path that takes reach/sharpness/strength. */
+  method?: LutMethod;
   include_saturation: boolean;
   /** Cube grid edge per channel. For `cube` any size ≥ 2 works (default
    *  33). For `png` it must be a perfect square (4, 9, 16, 25, 36, ...)
    *  because the HALD image side is Size·√Size. Default 64 → 512×512. */
   size?: number;
+
+  // K-NN knobs (used when method is "knn" or omitted).
+  radius: number;
+  distribution: number;
+  intensity: number;
+  blend_neighbors: number;
+
+  // RBF knobs (used when method is "rbf").
+  reach?: number;
+  sharpness?: number;
+  strength?: number;
 }
 
 export interface LutResult {
@@ -48,12 +63,20 @@ export function decodePNG(res: LutResult): Blob {
  *  Same shape as LutRequest minus `format` (always cube on the backend). */
 export interface ApplyLutParams {
   colors: string[];
+  method?: LutMethod;
+  include_saturation: boolean;
+  size?: number;
+
+  // K-NN knobs.
   radius: number;
   distribution: number;
   intensity: number;
   blend_neighbors: number;
-  include_saturation: boolean;
-  size?: number;
+
+  // RBF knobs.
+  reach?: number;
+  sharpness?: number;
+  strength?: number;
 }
 
 export interface ApplyLutResult {

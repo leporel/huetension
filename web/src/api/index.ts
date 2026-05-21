@@ -12,3 +12,4 @@ export * as library from './library';
 export * as exportPalette from './exportPalette';
 export * as lut from './lut';
 export * as blindness from './blindness';
+export * as info from './info';

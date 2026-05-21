@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { watchDebounced } from "@vueuse/core";
 import { exportPalette, lut } from "../api";
 import type { ExportFormat } from "../api/exportPalette";
-import type { LutFormat } from "../api/lut";
+import type { LutFormat, LutMethod } from "../api/lut";
 import { useWorkspaceStore } from "../stores/workspace";
 import ImagePickerModal from "./ImagePickerModal.vue";
 
@@ -49,12 +49,21 @@ const LUT_LEVELS: { level: number; value: number; label: string }[] = [
 
 // Defaults for the LUT knobs — mirror the CLI's `lut` command so
 // behaviour stays consistent between transports. The Reset button
-// re-applies these.
+// re-applies these. Both methods share the shared knobs (lutSize,
+// saturation); each method has its own knob set so toggling the
+// method doesn't fight with a previous method's slider drag.
 const DEFAULTS = {
+    method: "rbf" as LutMethod,
+    // K-NN (legacy "Layered").
     radius: 0.4,
     distribution: 0.15,
     intensity: 0.9,
     blend: 2,
+    // RBF (default "Smooth").
+    reach: 0.2,
+    sharpness: 2.0,
+    strength: 0.9,
+    // Shared.
     saturation: false,
     lutSize: 64,
 } as const;
@@ -82,10 +91,17 @@ const NOTATIONS: { value: string; label: string }[] = [
 // texture PNG); every other knob — sliders + cube size — is shared so
 // the test grade is identical regardless of which sub-tab is open.
 const lutFormat = ref<LutFormat>("cube");
+const lutMethod = ref<LutMethod>(DEFAULTS.method);
+// K-NN knobs.
 const lutRadius = ref(DEFAULTS.radius);
 const lutDistribution = ref(DEFAULTS.distribution);
 const lutIntensity = ref(DEFAULTS.intensity);
-const lutBlend = ref(DEFAULTS.blend);
+const lutBlend = ref<number>(DEFAULTS.blend);
+// RBF knobs.
+const lutReach = ref(DEFAULTS.reach);
+const lutSharpness = ref(DEFAULTS.sharpness);
+const lutStrength = ref(DEFAULTS.strength);
+// Shared.
 const lutSaturation = ref(DEFAULTS.saturation);
 const lutSize = ref<number>(DEFAULTS.lutSize);
 
@@ -202,10 +218,17 @@ function currentLutParams() {
     const colors = workspace.colors.map((c) => c.hex);
     return {
         colors,
+        method: lutMethod.value,
+        // Both knob sets ship every request so the backend can pick the
+        // active one without the SPA branching at send-time. Unused
+        // knobs are ignored by the per-method validator.
         radius: lutRadius.value,
         distribution: lutDistribution.value,
         intensity: lutIntensity.value,
         blend_neighbors: Math.min(lutBlend.value, Math.max(colors.length, 1)),
+        reach: lutReach.value,
+        sharpness: lutSharpness.value,
+        strength: lutStrength.value,
         include_saturation: lutSaturation.value,
         size: lutSize.value,
     };
@@ -255,6 +278,9 @@ function resetLUTDefaults(): void {
     lutDistribution.value = DEFAULTS.distribution;
     lutIntensity.value = DEFAULTS.intensity;
     lutBlend.value = Math.min(DEFAULTS.blend, blendMax.value);
+    lutReach.value = DEFAULTS.reach;
+    lutSharpness.value = DEFAULTS.sharpness;
+    lutStrength.value = DEFAULTS.strength;
     lutSaturation.value = DEFAULTS.saturation;
     lutSize.value = DEFAULTS.lutSize;
 }
@@ -324,10 +350,14 @@ watchDebounced(
         shades,
         colorNotation,
         lutFormat,
+        lutMethod,
         lutRadius,
         lutDistribution,
         lutIntensity,
         lutBlend,
+        lutReach,
+        lutSharpness,
+        lutStrength,
         lutSaturation,
         lutSize,
         () => workspace.colors,
@@ -343,10 +373,14 @@ watchDebounced(
 watchDebounced(
     [
         testImage,
+        lutMethod,
         lutRadius,
         lutDistribution,
         lutIntensity,
         lutBlend,
+        lutReach,
+        lutSharpness,
+        lutStrength,
         lutSaturation,
         lutSize,
         () => workspace.colors,
@@ -522,62 +556,143 @@ function download(): void {
                     </button>
                 </div>
 
+                <div
+                    class="lut-method-row"
+                    role="radiogroup"
+                    aria-label="LUT algorithm"
+                >
+                    <button
+                        type="button"
+                        class="lut-method-btn"
+                        :class="{ active: lutMethod === 'rbf' }"
+                        role="radio"
+                        :aria-checked="lutMethod === 'rbf'"
+                        @click="lutMethod = 'rbf'"
+                    >
+                        Smooth
+                    </button>
+                    <button
+                        type="button"
+                        class="lut-method-btn"
+                        :class="{ active: lutMethod === 'knn' }"
+                        role="radio"
+                        :aria-checked="lutMethod === 'knn'"
+                        @click="lutMethod = 'knn'"
+                    >
+                        Layered
+                    </button>
+                </div>
+
                 <div class="lut-grid">
-                    <label class="lut-fld">
-                        <span
-                            >Radius <em>{{ lutRadius.toFixed(2) }}</em></span
-                        >
-                        <input
-                            v-model.number="lutRadius"
-                            type="range"
-                            min="0"
-                            max="1.5"
-                            step="0.01"
-                            aria-label="OkLab pull radius"
-                        />
-                    </label>
-                    <label class="lut-fld">
-                        <span
-                            >Distribution
-                            <em>{{ lutDistribution.toFixed(2) }}</em></span
-                        >
-                        <input
-                            v-model.number="lutDistribution"
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.01"
-                            aria-label="falloff distribution"
-                        />
-                    </label>
-                    <label class="lut-fld">
-                        <span
-                            >Intensity
-                            <em>{{ lutIntensity.toFixed(2) }}</em></span
-                        >
-                        <input
-                            v-model.number="lutIntensity"
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.01"
-                            aria-label="pull intensity"
-                        />
-                    </label>
-                    <label class="lut-fld">
-                        <span
-                            >Blend
-                            <em>{{ lutBlend }} / {{ blendMax }}</em></span
-                        >
-                        <input
-                            v-model.number="lutBlend"
-                            type="range"
-                            min="1"
-                            :max="blendMax"
-                            step="1"
-                            aria-label="K-NN neighbours count"
-                        />
-                    </label>
+                    <!-- RBF (Smooth) knobs — Gaussian-like kernel over every
+                         palette colour, blended in OkLab a/b. No Voronoi edges,
+                         no antipodal hue collapse. -->
+                    <template v-if="lutMethod === 'rbf'">
+                        <label class="lut-fld">
+                            <span
+                                >Reach <em>{{ lutReach.toFixed(2) }}</em></span
+                            >
+                            <input
+                                v-model.number="lutReach"
+                                type="range"
+                                min="0.05"
+                                max="0.6"
+                                step="0.01"
+                                aria-label="RBF kernel reach (OkLab σ)"
+                            />
+                        </label>
+                        <label class="lut-fld">
+                            <span
+                                >Sharpness
+                                <em>{{ lutSharpness.toFixed(1) }}</em></span
+                            >
+                            <input
+                                v-model.number="lutSharpness"
+                                type="range"
+                                min="0.5"
+                                max="6"
+                                step="0.1"
+                                aria-label="RBF kernel exponent"
+                            />
+                        </label>
+                        <label class="lut-fld">
+                            <span
+                                >Strength
+                                <em>{{ lutStrength.toFixed(2) }}</em></span
+                            >
+                            <input
+                                v-model.number="lutStrength"
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                aria-label="RBF pull strength"
+                            />
+                        </label>
+                    </template>
+
+                    <!-- K-NN (Layered) knobs — legacy K-nearest with falloff +
+                         OkLCH circular mean. Sharper, can seam across antipodal
+                         palettes. -->
+                    <template v-else>
+                        <label class="lut-fld">
+                            <span
+                                >Radius
+                                <em>{{ lutRadius.toFixed(2) }}</em></span
+                            >
+                            <input
+                                v-model.number="lutRadius"
+                                type="range"
+                                min="0"
+                                max="1.5"
+                                step="0.01"
+                                aria-label="OkLab pull radius"
+                            />
+                        </label>
+                        <label class="lut-fld">
+                            <span
+                                >Distribution
+                                <em>{{ lutDistribution.toFixed(2) }}</em></span
+                            >
+                            <input
+                                v-model.number="lutDistribution"
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                aria-label="falloff distribution"
+                            />
+                        </label>
+                        <label class="lut-fld">
+                            <span
+                                >Intensity
+                                <em>{{ lutIntensity.toFixed(2) }}</em></span
+                            >
+                            <input
+                                v-model.number="lutIntensity"
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                aria-label="pull intensity"
+                            />
+                        </label>
+                        <label class="lut-fld">
+                            <span
+                                >Blend
+                                <em>{{ lutBlend }} / {{ blendMax }}</em></span
+                            >
+                            <input
+                                v-model.number="lutBlend"
+                                type="range"
+                                min="1"
+                                :max="blendMax"
+                                step="1"
+                                aria-label="K-NN neighbours count"
+                            />
+                        </label>
+                    </template>
+
                     <label class="lut-fld lut-toggle">
                         <input
                             v-model="lutSaturation"
@@ -972,6 +1087,35 @@ function download(): void {
 }
 
 .lut-reset:hover {
+    color: var(--fg-0);
+    border-color: var(--accent-line);
+}
+
+.lut-method-row {
+    display: flex;
+    gap: 4px;
+}
+
+.lut-method-btn {
+    flex: 1 1 0;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--fg-2);
+    background: var(--bg-1);
+    border: 1px solid var(--line-soft);
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.lut-method-btn:hover {
+    color: var(--fg-0);
+    border-color: var(--accent-line);
+}
+
+.lut-method-btn.active {
+    background: var(--accent-soft);
     color: var(--fg-0);
     border-color: var(--accent-line);
 }

@@ -13,14 +13,22 @@ import (
 )
 
 type lutFlags struct {
-	format       string
+	format     string
+	method     string
+	saturation bool
+	size       string
+	output     string
+
+	// K-NN method.
 	radius       float64
 	distribution float64
 	intensity    float64
 	blend        int
-	saturation   bool
-	size         string
-	output       string
+
+	// RBF method.
+	reach     float64
+	sharpness float64
+	strength  float64
 }
 
 func newLutCmd() *cobra.Command {
@@ -29,15 +37,17 @@ func newLutCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lut <color> [color2 ...]",
 		Short: "Generate a 3D color-grading LUT from a palette",
-		Long: "Generate a 3D lookup table (LUT) that pulls colours toward a palette in OkLCH colorspace. " +
+		Long: "Generate a 3D lookup table (LUT) that pulls colours toward a palette in OkLab. " +
 			"The LUT can be exported as a Cube file (.cube, dependable input for ffmpeg's lut3d filter, " +
 			"DaVinci Resolve, etc.) or as a 2D LUT texture PNG (a visualisation of the cube — not the " +
 			"standard HALD layout despite the similar look). " +
 			"With no positional args, reads one color per line from stdin.\n\n" +
 			"Use --format to select output (cube|png, default cube). " +
-			"Adjust the pull strength with --radius (OkLab distance zone), --distribution (falloff shape, 0..1), " +
-			"and --intensity (pull strength, 0..1). " +
-			"Use --blend N for K-NN weighted blending across multiple palette colours. " +
+			"Pick the algorithm with --method (rbf|knn, default rbf). The smooth RBF path blends every " +
+			"palette colour through a Gaussian-like kernel in OkLab a/b — controlled by --reach " +
+			"(kernel σ), --sharpness (kernel exponent, p=2 is Gaussian, higher = closer to nearest-only), " +
+			"and --strength (pull factor 0..1). The legacy K-NN path takes --radius, --distribution, " +
+			"--intensity, and --blend. " +
 			"Pass --saturation to also shift chroma (hue-only by default).\n\n" +
 			"For --format png, --size must be a perfect square (4, 9, 16, 25, 36, 49, 64, ...). " +
 			"The resulting image side is size·√size pixels (e.g. size 16 → 64×64; size 64 → 512×512). " +
@@ -49,13 +59,21 @@ func newLutCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&lf.format, "format", "cube", "output format (cube|png)")
-	cmd.Flags().Float64Var(&lf.radius, "radius", 0.40, "OkLab distance pull zone (0..∞)")
-	cmd.Flags().Float64Var(&lf.distribution, "distribution", 0.15, "falloff shape (0..1; 0.5=linear, <0.5=edges, >0.5=center)")
-	cmd.Flags().Float64Var(&lf.intensity, "intensity", 0.90, "pull strength (0..1)")
-	cmd.Flags().IntVar(&lf.blend, "blend", 2, "K-NN: number of nearest colours to blend (≥1)")
+	cmd.Flags().StringVar(&lf.method, "method", "rbf", "algorithm: rbf (smooth Gaussian over all palette colours) | knn (legacy K-nearest)")
 	cmd.Flags().BoolVar(&lf.saturation, "saturation", false, "also shift chroma (default: hue only — chroma frozen)")
 	cmd.Flags().StringVar(&lf.size, "size", "", "cube edge: integer or preset (obs|ffmpeg|standard|small|medium|large). Default: 33 cube, 64 png")
 	cmd.Flags().StringVarP(&lf.output, "output", "o", "-", "output file; use \"-\" for stdout")
+
+	// RBF knobs (default method).
+	cmd.Flags().Float64Var(&lf.reach, "reach", 0.20, "RBF: kernel σ in OkLab — how far each palette colour reaches (>0)")
+	cmd.Flags().Float64Var(&lf.sharpness, "sharpness", 2.0, "RBF: kernel exponent p in exp(-(d/σ)^p); 2=Gaussian, higher=sharper")
+	cmd.Flags().Float64Var(&lf.strength, "strength", 0.90, "RBF: pull factor (0..1)")
+
+	// Legacy K-NN knobs.
+	cmd.Flags().Float64Var(&lf.radius, "radius", 0.40, "K-NN: OkLab distance pull zone (0..∞)")
+	cmd.Flags().Float64Var(&lf.distribution, "distribution", 0.15, "K-NN: falloff shape (0..1; 0.5=linear, <0.5=edges, >0.5=center)")
+	cmd.Flags().Float64Var(&lf.intensity, "intensity", 0.90, "K-NN: pull strength (0..1)")
+	cmd.Flags().IntVar(&lf.blend, "blend", 2, "K-NN: number of nearest colours to blend (≥1)")
 
 	return cmd
 }
@@ -80,6 +98,15 @@ func runLUT(args []string, lf *lutFlags) error {
 		return fmt.Errorf("unknown --format %q (want cube|png)", lf.format)
 	}
 
+	method := strings.ToLower(strings.TrimSpace(lf.method))
+	switch method {
+	case "", lut.MethodRBF:
+		method = lut.MethodRBF
+	case lut.MethodKNN:
+	default:
+		return fmt.Errorf("unknown --method %q (want rbf|knn)", lf.method)
+	}
+
 	lutSize, err := resolveLutSizeFlag(lf.size, format)
 	if err != nil {
 		return err
@@ -87,11 +114,15 @@ func runLUT(args []string, lf *lutFlags) error {
 
 	opts := lut.Options{
 		Size:              lutSize,
+		Method:            method,
+		IncludeSaturation: lf.saturation,
 		Radius:            lf.radius,
 		Distribution:      lf.distribution,
 		Intensity:         lf.intensity,
 		BlendNeighbors:    lf.blend,
-		IncludeSaturation: lf.saturation,
+		Reach:             lf.reach,
+		Sharpness:         lf.sharpness,
+		Strength:          lf.strength,
 	}
 
 	p := palette.New(colors)

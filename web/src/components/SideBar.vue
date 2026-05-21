@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useWorkspaceStore } from '../stores/workspace';
+import { getInfo, type ServerInfo } from '../api/info';
 
 // Inline-SVG icon names match the design source exactly
 // (.prompts/exampleUI/example.html lines 473–528). Stays decoupled
@@ -40,6 +41,20 @@ interface SideGroup {
 
 const route = useRoute();
 const workspace = useWorkspaceStore();
+
+const serverInfo = ref<ServerInfo | null>(null);
+const versionLabel = computed(() => {
+  const v = serverInfo.value?.version;
+  return v ? `v${v.replace(/^v/, '')}` : '';
+});
+
+onMounted(async () => {
+  try {
+    serverInfo.value = await getInfo();
+  } catch {
+    serverInfo.value = null;
+  }
+});
 
 const groups = computed<SideGroup[]>(() => [
   {
@@ -154,11 +169,8 @@ function isActive(item: SideItem): boolean {
     </template>
 
     <div class="side-foot">
-      <div class="foot-name">huetension web</div>
-      <div class="foot-sub">Phase 3 · web UI</div>
-      <div class="track">
-        <span class="fill" />
-      </div>
+      <div class="foot-name">huetension</div>
+      <div class="foot-sub">{{ versionLabel || '—' }}</div>
     </div>
   </aside>
 </template>
@@ -266,19 +278,4 @@ function isActive(item: SideItem): boolean {
   margin-bottom: 8px;
 }
 
-.track {
-  height: 4px;
-  border-radius: 999px;
-  background: var(--bg-3);
-  position: relative;
-  overflow: hidden;
-}
-
-.track .fill {
-  position: absolute;
-  inset: 0;
-  width: 28%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), oklch(0.70 0.18 320));
-}
 </style>

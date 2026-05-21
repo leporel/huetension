@@ -247,6 +247,228 @@ func TestEncodeHaldPNGRejectsNonPerfectSquareSize(t *testing.T) {
 	}
 }
 
+func TestGenerateRBFIdentity(t *testing.T) {
+	p := palette.New([]color.Color{
+		color.New(255, 0, 0),
+		color.New(0, 255, 0),
+		color.New(0, 0, 255),
+	})
+
+	opts := Options{
+		Size:              5,
+		Method:            MethodRBF,
+		Reach:             0.20,
+		Sharpness:         2.0,
+		Strength:          0,
+		IncludeSaturation: true,
+	}
+
+	lut, err := Generate(p, opts)
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	// Strength=0 must short-circuit to the exact identity grid — same
+	// invariant as the K-NN Intensity=0 path.
+	for idx := range opts.Size * opts.Size * opts.Size {
+		r := idx % opts.Size
+		g := (idx / opts.Size) % opts.Size
+		b := (idx / (opts.Size * opts.Size))
+
+		expR := uint8(math.Round(float64(r) / float64(opts.Size-1) * 255))
+		expG := uint8(math.Round(float64(g) / float64(opts.Size-1) * 255))
+		expB := uint8(math.Round(float64(b) / float64(opts.Size-1) * 255))
+
+		got := lut.Nodes[idx]
+		if got.R != expR || got.G != expG || got.B != expB {
+			t.Fatalf("node %d: expected (%d,%d,%d), got (%d,%d,%d)",
+				idx, expR, expG, expB, got.R, got.G, got.B)
+		}
+	}
+}
+
+func TestGenerateRBFSharpnessDiffer(t *testing.T) {
+	p := palette.New([]color.Color{
+		color.New(255, 0, 0),
+		color.New(0, 0, 255),
+		color.New(0, 255, 0),
+	})
+
+	common := Options{
+		Size:              5,
+		Method:            MethodRBF,
+		Reach:             0.25,
+		Strength:          0.8,
+		IncludeSaturation: true,
+	}
+
+	soft := common
+	soft.Sharpness = 1.0
+	sharp := common
+	sharp.Sharpness = 6.0
+
+	lutSoft, err := Generate(p, soft)
+	if err != nil {
+		t.Fatalf("Generate (sharpness 1): %v", err)
+	}
+	lutSharp, err := Generate(p, sharp)
+	if err != nil {
+		t.Fatalf("Generate (sharpness 6): %v", err)
+	}
+
+	diff := 0
+	for i := range lutSoft.Nodes {
+		a, b := lutSoft.Nodes[i], lutSharp.Nodes[i]
+		if a.R != b.R || a.G != b.G || a.B != b.B {
+			diff++
+		}
+	}
+	if diff == 0 {
+		t.Error("Sharpness=1 and Sharpness=6 produced identical LUTs")
+	}
+}
+
+func TestGenerateRBFSaturationToggle(t *testing.T) {
+	p := palette.New([]color.Color{color.New(255, 0, 0)})
+
+	common := Options{
+		Size:      5,
+		Method:    MethodRBF,
+		Reach:     0.20,
+		Sharpness: 2.0,
+		Strength:  0.8,
+	}
+	withSat := common
+	withSat.IncludeSaturation = true
+	noSat := common
+	noSat.IncludeSaturation = false
+
+	lutWith, err := Generate(p, withSat)
+	if err != nil {
+		t.Fatalf("Generate (with sat): %v", err)
+	}
+	lutNo, err := Generate(p, noSat)
+	if err != nil {
+		t.Fatalf("Generate (no sat): %v", err)
+	}
+
+	// IncludeSaturation toggles whether (newA, newB) gets rescaled to
+	// preserve the node's original chroma magnitude — outputs must
+	// differ in at least one node.
+	diff := 0
+	for i := range lutWith.Nodes {
+		a, b := lutWith.Nodes[i], lutNo.Nodes[i]
+		if a.R != b.R || a.G != b.G || a.B != b.B {
+			diff++
+		}
+	}
+	if diff == 0 {
+		t.Error("RBF IncludeSaturation toggle produced identical LUTs")
+	}
+}
+
+func TestGenerateRBFDeterminism(t *testing.T) {
+	p := palette.New([]color.Color{
+		color.New(255, 0, 0),
+		color.New(0, 255, 0),
+	})
+
+	opts := Options{
+		Size:              5,
+		Method:            MethodRBF,
+		Reach:             0.20,
+		Sharpness:         2.0,
+		Strength:          0.8,
+		IncludeSaturation: true,
+	}
+
+	lut1, _ := Generate(p, opts)
+	lut2, _ := Generate(p, opts)
+
+	if !bytes.Equal(EncodeCube(lut1, "t"), EncodeCube(lut2, "t")) {
+		t.Error("two RBF Generate runs produced different cubes")
+	}
+}
+
+func TestGenerateRBFValidation(t *testing.T) {
+	p := palette.New([]color.Color{color.New(255, 0, 0)})
+
+	base := Options{Size: 5, Method: MethodRBF, Reach: 0.20, Sharpness: 2.0, Strength: 0.8}
+
+	tests := []struct {
+		name    string
+		opts    Options
+		wantErr bool
+	}{
+		{"valid", base, false},
+		{"reach 0", func() Options { o := base; o.Reach = 0; return o }(), true},
+		{"negative reach", func() Options { o := base; o.Reach = -0.1; return o }(), true},
+		{"sharpness 0", func() Options { o := base; o.Sharpness = 0; return o }(), true},
+		{"negative sharpness", func() Options { o := base; o.Sharpness = -1; return o }(), true},
+		{"negative strength", func() Options { o := base; o.Strength = -0.1; return o }(), true},
+		{"strength > 1", func() Options { o := base; o.Strength = 1.5; return o }(), true},
+		{"unknown method", func() Options { o := base; o.Method = "bogus"; return o }(), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Generate(p, tt.opts)
+			if tt.wantErr && err == nil {
+				t.Error("expected error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestGenerateRBFShiftsPaletteRegion is a smoke test for the RBF path
+// on an antipodal palette (blue + red — the case where the K-NN
+// circular hue mean used to collapse). It just confirms the algorithm
+// produces a non-identity cube with finite, in-gamut output. The
+// visual smoothness claim against the K-NN path is verified by eye in
+// the SPA, not asserted here — comparing the two output cubes pixel-
+// wise depends on knob choice and would be brittle.
+func TestGenerateRBFShiftsPaletteRegion(t *testing.T) {
+	p := palette.New([]color.Color{
+		color.New(20, 60, 220), // blue
+		color.New(230, 40, 50), // red — near-antipodal hue in OkLab
+	})
+
+	opts := Options{
+		Size:      9,
+		Method:    MethodRBF,
+		Reach:     0.20,
+		Sharpness: 2.0,
+		Strength:  0.90,
+	}
+
+	generated, err := Generate(p, opts)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	// At least one mid-cube node must have moved off the identity grid.
+	moved := 0
+	for idx, n := range generated.Nodes {
+		r := idx % opts.Size
+		g := (idx / opts.Size) % opts.Size
+		b := (idx / (opts.Size * opts.Size))
+
+		expR := uint8(math.Round(float64(r) / float64(opts.Size-1) * 255))
+		expG := uint8(math.Round(float64(g) / float64(opts.Size-1) * 255))
+		expB := uint8(math.Round(float64(b) / float64(opts.Size-1) * 255))
+
+		if n.R != expR || n.G != expG || n.B != expB {
+			moved++
+		}
+	}
+	if moved == 0 {
+		t.Error("RBF with Strength=0.9 produced an identity cube — algorithm did nothing")
+	}
+}
+
 // TestHaldIdentityMatchesReference verifies that an Intensity=0 level-8 HALD
 // is pixel-identical to the canonical identity HALD .refs/LUT_original.png.
 // This locks both the OkLab identity short-circuit and the HALD pixel layout.
