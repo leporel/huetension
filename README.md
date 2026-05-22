@@ -3,8 +3,10 @@
 A color palette toolkit for designers, frontend devs, and photographers. One binary, three frontends — **CLI**, **MCP server**, and **Web UI** — sharing a single pure-Go core.
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/leporel/huetension)](https://goreportcard.com/report/github.com/leporel/huetension)
+[![Go Reference](https://pkg.go.dev/badge/github.com/leporel/huetension)](https://pkg.go.dev/github.com/leporel/huetension)
 [![Latest release](https://img.shields.io/github/v/release/leporel/huetension)](https://github.com/leporel/huetension/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go Reference](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/leporel/huetension/issues)
 [![CI](https://github.com/leporel/huetension/actions/workflows/ci.yml/badge.svg)](https://github.com/leporel/huetension/actions/workflows/ci.yml)
 
 ![huetension web UI](.github/preview.jpg)
