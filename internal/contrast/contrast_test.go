@@ -206,19 +206,21 @@ func TestSuggestFailingFGFindsFix(t *testing.T) {
 }
 
 func TestSuggestNoPassReturnsNilSuggested(t *testing.T) {
-	// Same-color pair can never reach a meaningful target; the sweep
-	// holds chroma + hue fixed so no L produces real contrast.
+	// WCAG's max ratio is 21:1 (pure black vs pure white) — a target of
+	// 100 is unreachable for any colour pair, so the sweep cannot
+	// produce a passing sample and Suggested must be nil.
 	red := mustParse(t, "red")
-	res, err := Suggest(red, red, AlgoWCAG21, 4.5)
+	white := mustParse(t, "white")
+	res, err := Suggest(red, white, AlgoWCAG21, 100)
 	if err != nil {
 		t.Fatalf("Suggest: %v", err)
 	}
 	if res.Suggested != nil {
-		t.Errorf("identical fg/bg should not yield a suggestion, got %+v", res.Suggested)
+		t.Errorf("unreachable target should not yield a suggestion, got %+v", res.Suggested)
 	}
 	for _, s := range res.Samples {
 		if s.Pass {
-			t.Errorf("identical fg/bg sweep should have no passing sample, got %+v", s)
+			t.Errorf("unreachable target sweep should have no passing sample, got %+v", s)
 		}
 	}
 }

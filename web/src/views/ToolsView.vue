@@ -59,6 +59,13 @@ let drag: {
     startY: number;
     origX: number;
     origY: number;
+    // Cached card box at drag-start. Re-reading offsetWidth/offsetHeight
+    // every pointermove forces a synchronous layout flush, which scales
+    // with total DOM cost — e.g. a level-8 LUT cube preview that parks
+    // 64³ lines of <pre> text in the page turns the drag into a layout
+    // thrash. The card can't resize mid-gesture, so the snapshot is safe.
+    cardW: number;
+    cardH: number;
 } | null = null;
 
 function onWheelCardPointerDown(e: PointerEvent) {
@@ -72,11 +79,10 @@ function onWheelCardPointerDown(e: PointerEvent) {
     const card = header.parentElement as HTMLElement | null;
     if (!card) return;
 
-    // Initialise position from the rendered rect on the first drag —
-    // matches whatever the default anchor produced so the card doesn't
-    // jump under the cursor.
+    // One layout read for the whole gesture: pos (if needed) + size, both
+    // off the same rect.
+    const r = card.getBoundingClientRect();
     if (!wheelPinPos.value) {
-        const r = card.getBoundingClientRect();
         wheelPinPos.value = { x: r.left, y: r.top };
     }
 
@@ -85,6 +91,8 @@ function onWheelCardPointerDown(e: PointerEvent) {
         startY: e.clientY,
         origX: wheelPinPos.value.x,
         origY: wheelPinPos.value.y,
+        cardW: r.width,
+        cardH: r.height,
     };
     e.preventDefault();
     window.addEventListener("pointermove", onPointerMove);
@@ -95,9 +103,8 @@ function onWheelCardPointerDown(e: PointerEvent) {
 
 function onPointerMove(e: PointerEvent) {
     if (!drag || !wheelPinPos.value) return;
-    const cardEl = document.getElementById("wheel");
-    const w = cardEl?.offsetWidth ?? 360;
-    const h = cardEl?.offsetHeight ?? 0;
+    const w = drag.cardW;
+    const h = drag.cardH;
     const x = Math.max(
         0,
         Math.min(window.innerWidth - w, drag.origX + e.clientX - drag.startX),

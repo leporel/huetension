@@ -63,7 +63,7 @@ func runContrast(rawFG, rawBG string, cf *contrastFlags) error {
 		return err
 	}
 
-	var payload any = result
+	var payload = result
 	if cf.suggest {
 		target, err := defaultSuggestTarget(algo, cf.target)
 		if err != nil {
@@ -97,6 +97,9 @@ func runContrast(rawFG, rawBG string, cf *contrastFlags) error {
 // having to memorise the per-algo scales. An explicit non-zero --target
 // is passed through unchanged.
 func defaultSuggestTarget(algo contrast.Algo, target float64) (float64, error) {
+	if target < 0 {
+		return 0, fmt.Errorf("contrast: --target must be non-negative, got %g", target)
+	}
 	if target > 0 {
 		return target, nil
 	}

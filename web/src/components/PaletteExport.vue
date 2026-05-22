@@ -113,6 +113,35 @@ const loading = ref(false);
 const errorMsg = ref<string | null>(null);
 const copied = ref(false);
 
+// Cap for the in-DOM cube preview. A level-8 LUT (cube 64) is 64³ ≈ 262k
+// lines (~6 MB of text); parking that in a single <pre> makes every page
+// layout pass expensive and lags unrelated interactions like dragging the
+// pinned wheel card. Copy/download still emit the untouched full
+// `content.value`.
+const CUBE_PREVIEW_MAX_LINES = 1024;
+
+const displayedCubeContent = computed<string>(() => {
+    const full = content.value;
+    if (!full) return "";
+    let nl = 0;
+    let cut = -1;
+    for (let i = 0; i < full.length; i++) {
+        if (full.charCodeAt(i) === 10) {
+            nl++;
+            if (nl === CUBE_PREVIEW_MAX_LINES) {
+                cut = i;
+                break;
+            }
+        }
+    }
+    if (cut === -1) return full;
+    let remaining = 0;
+    for (let i = cut + 1; i < full.length; i++) {
+        if (full.charCodeAt(i) === 10) remaining++;
+    }
+    return `${full.slice(0, cut)}\n… (${remaining.toLocaleString()} more lines — use Copy or Download for the full cube)`;
+});
+
 const isLUT = computed(() => format.value === "lut");
 const isLUTTexture = computed(() => isLUT.value && lutFormat.value === "png");
 const isBinary = computed(() => blobUrl.value !== null);
@@ -729,7 +758,8 @@ function download(): void {
                     class="cube-text mono"
                     :class="{ placeholder: !content }"
                     >{{
-                        content || (loading ? "Generating…" : "No output")
+                        displayedCubeContent ||
+                        (loading ? "Generating…" : "No output")
                     }}</pre
                 >
                 <img
