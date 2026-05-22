@@ -13,7 +13,7 @@ A color palette toolkit for designers, frontend devs, and photographers. One bin
 
 ### 🎨 Palette generation
 
--  **Extract from images** — file path, http(s) URL, `data:` URI, or stdin. Methods: `soft` (default, designer-friendly), `softk`, `kmeans`, `dominant`, with mood presets.
+-  **Extract from images** — file path, http(s) URL, `data:` URI, or stdin. Methods: `soft` (default, designer-friendly), `softk`, `kmeans`, `okkmeans`, `mediancut`, `octree`, `popularity`, `wu`, `dbscan`, `wkmeans`, with mood presets for `soft`/`softk`.
 -  **Random palettes** — deterministic when seeded, optionally driven by a harmony rule.
 -  **Harmonies around a base color** — complementary, analogous, triadic, split, tetradic, square, double-complementary, compound, monochromatic, shades.
 -  **Gradients** — two endpoints or N positioned stops, interpolated in OkLab / OkLCH / Lab / RGB / HSL with optional easing.
@@ -50,10 +50,10 @@ A color palette toolkit for designers, frontend devs, and photographers. One bin
 ### CLI
 
 ```sh
-huetension extract photo.jpg -n 6
+huetension extract photo.jpg -k 6
 huetension harmony complementary "#3498db"
-huetension gradient --from "#ff0066" --to "#00bcd4" --steps 9
-huetension contrast --fg "#222" --bg "#fff" --algo wcag21
+huetension gradient "#ff0066" "#00bcd4" --steps 9
+huetension contrast "#222" "#fff" --algo wcag21
 ```
 
 ANSI swatches by default, JSON / CSS / SCSS / Tailwind / GIMP `.gpl` / PNG / `.ase` / `.aco` on demand.

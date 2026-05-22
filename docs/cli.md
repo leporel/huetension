@@ -36,7 +36,7 @@ Configuration precedence: explicit flag > `HUETENSION_*` env > `config.yaml` > b
 ### `extract <source>` — pull a palette from an image
 
 ```sh
-huetension extract photo.jpg -n 6
+huetension extract photo.jpg -k 6
 huetension extract https://example.com/photo.jpg --method softk
 huetension extract photo.jpg -o palette.png --swatch-size 120x80
 ```
@@ -47,7 +47,7 @@ Key flags: `--method`, `--size`/`-k`, `--resize`/`-r`, `--soft-preset`, `--merge
 
 ### `analyze <source>` — image color distribution strips
 
-Renders distribution strips in a chosen color space + distance metric. JSON by default.
+Renders distribution strips (hue / luminance / saturation / distance-to-primary) as a PNG by default. Use `--strip` to pick a single metric (default `all`) and `--space oklch|hsl` to switch the sort space.
 
 ### `harmony <type> <color>` — generate a color harmony
 
@@ -58,29 +58,32 @@ huetension harmony triadic "hsl(220, 70%, 50%)" --count 6
 
 Types: `complementary`, `analogous`, `triadic`, `split`, `tetradic`, `square`, `double` (alias of `double-complementary`), `compound`, `monochromatic`, `shades`.
 
-### `gradient` — build a gradient
+### `gradient <color1> <color2> [color3 ...]` — build a gradient
 
 ```sh
-huetension gradient --from "#ff0066" --to "#00bcd4" --steps 9
-huetension gradient --stops "#ff0066,#fffadc,#00bcd4" --steps 12 --space oklab --easing ease-in-out
+huetension gradient "#ff0066" "#00bcd4" --steps 9
+huetension gradient "#ff0066" "#fffadc" "#00bcd4" --steps 12 --space oklab --easing ease-in-out
 ```
 
-Stops can be positioned explicitly via `--positions`.
+Stops are positional. With 3+ stops they are spaced evenly across the gradient. PNG/JPEG outputs render a smooth raster strip instead of the discrete `--steps` palette.
 
-### `contrast` — WCAG / APCA contrast check
+### `contrast <foreground> <background>` — WCAG / APCA contrast check
 
 ```sh
-huetension contrast --fg "#222" --bg "#fff" --algo both
+huetension contrast "#222" "#fff" --algo wcag21
+huetension contrast "#222" "#fff" --algo apca
 ```
+
+`--algo` is `wcag21` (default) or `apca`. The MCP `contrast.check` tool additionally accepts `both`; the CLI is one-algo-per-call.
 
 ### `blindness` — simulate color-vision deficiency
 
 ```sh
-echo "#3498db" | huetension blindness --kind deuteranopia
+echo "#3498db" | huetension blindness --kind deutan
 huetension blindness --kind all "#3498db" "#e74c3c"
 ```
 
-Kinds: `protanopia`, `deuteranopia`, `tritanopia`, `achromatopsia`, `all`.
+Kinds: `protan` (protanopia), `deutan` (deuteranopia), `tritan` (tritanopia), `achroma` (achromatopsia), `all`.
 
 ### `convert` / `sort` — color list utilities
 
@@ -101,7 +104,7 @@ huetension random --count 6 --harmony triadic --seed 42
 ### `css` / `tailwind` — export-only convenience commands
 
 ```sh
-echo -e "#222\n#fff" | huetension css --kind scss --prefix brand
+echo -e "#222\n#fff" | huetension css --kind scss --name brand
 echo -e "#222\n#fff" | huetension tailwind --shades 11
 ```
 
