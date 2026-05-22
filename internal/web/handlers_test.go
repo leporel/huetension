@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	pcolor "github.com/leporel/huetension/internal/color"
 	"github.com/leporel/huetension/internal/exporter"
 	"github.com/leporel/huetension/internal/harmony"
-	pcolor "github.com/leporel/huetension/internal/color"
 	"github.com/leporel/huetension/internal/palette"
 )
 
@@ -42,7 +42,7 @@ func doGET(t *testing.T, base, path string, v any) *http.Response {
 	if err != nil {
 		t.Fatalf("GET %s: %v", path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
@@ -67,7 +67,7 @@ func doPOST(t *testing.T, base, path string, payload any, v any) *http.Response 
 	if err != nil {
 		t.Fatalf("POST %s: %v", path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
@@ -226,7 +226,7 @@ func TestHarmonyUnknownType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
@@ -539,20 +539,20 @@ func TestBadRequests(t *testing.T) {
 	base, teardown := newTestServer(t)
 	defer teardown()
 	cases := []string{
-		"/api/v1/color/convert",                                // missing color
-		"/api/v1/color/convert?color=not-a-color",              // bad color
-		"/api/v1/gradient?steps=5",                             // no from/to/stops
-		"/api/v1/gradient?from=%23ff0000&to=%2300ff00",         // missing steps
-		"/api/v1/contrast?fg=%23ffffff",                        // missing bg
-		"/api/v1/contrast?fg=%23ffffff&bg=%23000000&algo=xxx",  // unknown algo
-		"/api/v1/harmony/complementary/not-a-color",            // bad base color
+		"/api/v1/color/convert",                               // missing color
+		"/api/v1/color/convert?color=not-a-color",             // bad color
+		"/api/v1/gradient?steps=5",                            // no from/to/stops
+		"/api/v1/gradient?from=%23ff0000&to=%2300ff00",        // missing steps
+		"/api/v1/contrast?fg=%23ffffff",                       // missing bg
+		"/api/v1/contrast?fg=%23ffffff&bg=%23000000&algo=xxx", // unknown algo
+		"/api/v1/harmony/complementary/not-a-color",           // bad base color
 	}
 	for _, path := range cases {
 		resp, err := http.Get(base + path)
 		if err != nil {
 			t.Fatalf("GET %s: %v", path, err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusBadRequest {
 			t.Errorf("%s: status = %d, want 400", path, resp.StatusCode)
 		}

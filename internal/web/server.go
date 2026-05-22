@@ -102,6 +102,7 @@ func buildAppMux(cfg Config) (*http.ServeMux, error) {
 	registerAPI(mux, base, apiHandlers{
 		sandbox: cfg.Sandbox,
 		library: newLibraryState(cfg.Library, cfg.LibraryPath, cfg.Sandbox.ReadOnly),
+		version: cfg.Version,
 	})
 
 	// "/" serves either the embedded SPA (default) or a reverse proxy

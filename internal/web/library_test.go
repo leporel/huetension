@@ -100,7 +100,7 @@ func TestLibraryIndexETag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
-	resp1.Body.Close()
+	_ = resp1.Body.Close()
 	if resp1.StatusCode != http.StatusOK {
 		t.Fatalf("first request status: %d", resp1.StatusCode)
 	}
@@ -117,7 +117,7 @@ func TestLibraryIndexETag(t *testing.T) {
 		t.Fatalf("conditional GET: %v", err)
 	}
 	body2, _ := io.ReadAll(resp2.Body)
-	resp2.Body.Close()
+	_ = resp2.Body.Close()
 	if resp2.StatusCode != http.StatusNotModified {
 		t.Fatalf("matching If-None-Match: status %d, want 304", resp2.StatusCode)
 	}
@@ -133,7 +133,7 @@ func TestLibraryIndexETag(t *testing.T) {
 		t.Fatalf("stale conditional GET: %v", err)
 	}
 	body3, _ := io.ReadAll(resp3.Body)
-	resp3.Body.Close()
+	_ = resp3.Body.Close()
 	if resp3.StatusCode != http.StatusOK {
 		t.Errorf("stale If-None-Match: status %d, want 200", resp3.StatusCode)
 	}
@@ -150,7 +150,7 @@ func TestLibraryIndexETagChangesAfterSave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
-	resp1.Body.Close()
+	_ = resp1.Body.Close()
 	etag1 := resp1.Header.Get("ETag")
 	if etag1 == "" {
 		t.Fatal("no ETag on first /library response")
@@ -171,7 +171,7 @@ func TestLibraryIndexETagChangesAfterSave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("conditional GET: %v", err)
 	}
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 	if resp2.StatusCode != http.StatusOK {
 		t.Errorf("after save, pre-save ETag: status %d, want 200", resp2.StatusCode)
 	}
@@ -277,7 +277,7 @@ func TestLibraryUnavailableWhenNotConfigured(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GET %s: %v", p, err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusServiceUnavailable {
 			t.Errorf("%s: status %d, want 503", p, resp.StatusCode)
 		}
@@ -465,7 +465,7 @@ func TestLibraryRESTvsMCPColorParity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
-	defer cs.Close()
+	defer func() { _ = cs.Close() }()
 
 	for _, id := range ids {
 		t.Run(id, func(t *testing.T) {

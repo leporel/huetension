@@ -45,7 +45,7 @@ func extractOctree(pixels []color.Color, k int) []color.Color {
 	// that depth and collapsing as many as the budget allows. O(depth × N)
 	// total, instead of the O(N²) we'd get from picking one subtree at a
 	// time.
-	leafCount = octReduceBatch(root, leafCount, k)
+	octReduceBatch(root, leafCount, k)
 
 	var nodes []*octNode
 	octCollect(root, &nodes)

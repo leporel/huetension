@@ -25,6 +25,7 @@ import (
 type apiHandlers struct {
 	sandbox sandbox.ImageSandbox
 	library *libraryState
+	version string
 }
 
 // registerAPI mounts the REST endpoints on mux under base. Method patterns
@@ -32,6 +33,7 @@ type apiHandlers struct {
 // version pin. Stateless handlers are referenced by name; deps.* methods
 // close over the apiHandlers value so /extract sees the right sandbox.
 func registerAPI(mux *http.ServeMux, base string, deps apiHandlers) {
+	mux.HandleFunc("GET "+base+"/info", deps.handleInfo)
 	mux.HandleFunc("GET "+base+"/color/convert", handleColorConvert)
 	mux.HandleFunc("POST "+base+"/color/sort", handleColorSort)
 	mux.HandleFunc("GET "+base+"/harmony/{type}/{color}", handleHarmonyGenerate)
@@ -45,6 +47,26 @@ func registerAPI(mux *http.ServeMux, base string, deps apiHandlers) {
 	mux.HandleFunc("POST "+base+"/extract", deps.handleExtract)
 	mux.HandleFunc("POST "+base+"/analyze", deps.handleAnalyze)
 	registerLibrary(mux, base, deps.library)
+}
+
+// ---------- /info ----------
+
+type infoResult struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Schema  string `json:"schema"`
+}
+
+func (h apiHandlers) handleInfo(w http.ResponseWriter, _ *http.Request) {
+	v := strings.TrimSpace(h.version)
+	if v == "" {
+		v = "dev"
+	}
+	writeEnvelope(w, "info", nil, infoResult{
+		Name:    "huetension",
+		Version: v,
+		Schema:  schemaVersion,
+	})
 }
 
 // ---------- /color/convert ----------

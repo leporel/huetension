@@ -58,15 +58,15 @@ func (h apiHandlers) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		inputs analyzeInputs
 		err    error
 	)
-	switch {
-	case ct == "multipart/form-data":
+	switch ct {
+	case "multipart/form-data":
 		inputs, err = h.parseMultipartAnalyze(r)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 		defer cleanupMultipart(r)
-	case ct == "application/json", ct == "":
+	case "application/json", "":
 		inputs, err = parseJSONAnalyze(r)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
@@ -132,7 +132,7 @@ func (h apiHandlers) parseMultipartAnalyze(r *http.Request) (analyzeInputs, erro
 	if err != nil {
 		return analyzeInputs{}, fmt.Errorf("missing %q file field: %w", extractFileFieldName, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	if header.Size > max {
 		return analyzeInputs{}, fmt.Errorf("upload %d bytes exceeds limit %d", header.Size, max)

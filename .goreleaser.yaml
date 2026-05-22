@@ -1,0 +1,70 @@
+# Goreleaser config for huetension.
+#
+# Invoked by .github/workflows/release.yml after `bun run build` populates
+# web/dist/. We do not run the UI build here — that's the workflow's job —
+# because goreleaser hooks would need bun installed inside the action and
+# we already have it in the workflow.
+
+version: 2
+
+project_name: huetension
+
+builds:
+  - id: huetension
+    main: ./cmd/huetension
+    binary: huetension
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+
+archives:
+  - id: huetension
+    ids: [huetension]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE*
+      - README.md
+      - huetension.example.yaml
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+# Cosign keyless signing of the checksum file. GitHub Actions provides the
+# OIDC token when the workflow has `id-token: write`. Gated by an env
+# variable so forks without cosign opt in explicitly.
+signs:
+  - id: cosign-checksum
+    cmd: cosign
+    artifacts: checksum
+    output: true
+    args:
+      - sign-blob
+      - "--yes"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot+{{ .ShortCommit }}"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^test:"
+      - "Merge pull request"
+
+release:
+  draft: true
+  prerelease: auto

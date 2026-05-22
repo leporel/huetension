@@ -1,0 +1,18 @@
+.git
+.github
+.idea
+.vscode
+.prompts
+.refs
+
+# Build outputs from earlier local runs — the Dockerfile builds fresh.
+bin
+huetension
+huetension.exe
+*.test
+*.out
+coverage.*
+
+# Node deps — Dockerfile.dev runs bun install inside the image.
+web/node_modules
+node_modules

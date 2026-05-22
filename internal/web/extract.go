@@ -66,15 +66,15 @@ func (h apiHandlers) handleExtract(w http.ResponseWriter, r *http.Request) {
 		inputs extractInputs
 		err    error
 	)
-	switch {
-	case ct == "multipart/form-data":
+	switch ct {
+	case "multipart/form-data":
 		inputs, err = h.parseMultipartExtract(r)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 		defer cleanupMultipart(r)
-	case ct == "application/json", ct == "":
+	case "application/json", "":
 		// JSON body (and bare POSTs from curl without a Content-Type
 		// header — accept them for convenience, the decoder will reject
 		// malformed payloads).
@@ -143,7 +143,7 @@ func (h apiHandlers) parseMultipartExtract(r *http.Request) (extractInputs, erro
 	if err != nil {
 		return extractInputs{}, fmt.Errorf("missing %q file field: %w", extractFileFieldName, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	if header.Size > max {
 		return extractInputs{}, fmt.Errorf("upload %d bytes exceeds limit %d", header.Size, max)

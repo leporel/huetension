@@ -148,7 +148,7 @@ func loadFile(path string, max int64) (image.Image, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	info, err := f.Stat()
 	if err == nil && max > 0 && info.Size() > max {
@@ -198,7 +198,7 @@ func loadURL(rawURL string, opts LoadOptions) (image.Image, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", fmt.Errorf("http %d", resp.StatusCode)

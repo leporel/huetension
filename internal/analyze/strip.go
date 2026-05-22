@@ -181,7 +181,7 @@ func renderStrip(pixels []color.Color, cache *metricCache, metric Metric, width,
 func bucketColumns(sorted []int, cache *metricCache, width int) []stdcolor.RGBA {
 	n := len(sorted)
 	out := make([]stdcolor.RGBA, width)
-	var last stdcolor.RGBA = stdcolor.RGBA{A: 255}
+	last := stdcolor.RGBA{A: 255}
 	for x := 0; x < width; x++ {
 		start := x * n / width
 		end := (x + 1) * n / width

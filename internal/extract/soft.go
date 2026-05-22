@@ -184,10 +184,7 @@ func softPrefilter(pixels []color.Color, opts Options) []color.Color {
 //
 // Complexity: O(n^3) worst case but n is N×3 (15-30 typical), not pixel count.
 func mergeByDeltaE(aggs []softAgg, eps float64, minClusters int) []softAgg {
-	for {
-		if minClusters > 0 && len(aggs) <= minClusters {
-			break
-		}
+	for minClusters <= 0 || len(aggs) > minClusters {
 		bestI, bestJ := -1, -1
 		bestD := eps
 		for i := 0; i < len(aggs); i++ {

@@ -49,7 +49,7 @@ func TestHTTPEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	// Sanity: tools/list works.
 	list, err := session.ListTools(ctx, nil)
@@ -85,7 +85,7 @@ func TestHTTPRejectsMissingBearer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", resp.StatusCode)
 	}
@@ -112,7 +112,7 @@ func TestHTTPAcceptsValidBearer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect with valid bearer: %v", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	if _, err := session.ListTools(ctx, nil); err != nil {
 		t.Fatalf("ListTools: %v", err)
@@ -142,7 +142,7 @@ func TestHTTPCORSPreflight(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OPTIONS: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Errorf("status = %d, want 204", resp.StatusCode)
 	}

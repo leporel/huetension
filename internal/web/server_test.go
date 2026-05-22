@@ -24,7 +24,7 @@ func TestSPAFallback(t *testing.T) {
 			t.Fatalf("GET %s: %v", path, err)
 		}
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("%s status = %d, want 200", path, resp.StatusCode)
 		}
@@ -38,7 +38,7 @@ func TestSPAFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("API GET: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("API status = %d, want 200", resp.StatusCode)
 	}
@@ -70,7 +70,7 @@ func TestBearerAuthGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("no-token status = %d, want 401", resp.StatusCode)
 	}
@@ -85,7 +85,7 @@ func TestBearerAuthGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("auth GET: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("with-token status = %d, want 200", resp.StatusCode)
 	}
@@ -113,7 +113,7 @@ func TestCORSPreflight(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OPTIONS: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Errorf("status = %d, want 204", resp.StatusCode)
 	}
@@ -183,7 +183,7 @@ func TestDevProxyForwardsNonAPI(t *testing.T) {
 			t.Fatalf("GET %s: %v", path, err)
 		}
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		want := "vite:" + path
 		if string(body) != want {
 			t.Errorf("%s body = %q, want %q", path, body, want)
@@ -195,7 +195,7 @@ func TestDevProxyForwardsNonAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("API GET: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("API status = %d, want 200", resp.StatusCode)
 	}
@@ -220,11 +220,11 @@ func TestDevProxyRejectsBadUpstream(t *testing.T) {
 // changes surface as test diffs rather than silent breakage.
 func TestNormaliseBasePath(t *testing.T) {
 	cases := map[string]string{
-		"":          "/api/v1",
-		"/api/v1":   "/api/v1",
-		"api/v1":    "/api/v1",
-		"/api/v1/":  "/api/v1",
-		"/":         "/",
+		"":         "/api/v1",
+		"/api/v1":  "/api/v1",
+		"api/v1":   "/api/v1",
+		"/api/v1/": "/api/v1",
+		"/":        "/",
 		"/custom/": "/custom",
 	}
 	for in, want := range cases {

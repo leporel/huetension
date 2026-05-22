@@ -1,0 +1,40 @@
+# huetension.example.yaml — annotated example config.
+#
+# Copy to the data directory (defaults: ~/.config/huetension/config.yaml on
+# Linux/macOS, %APPDATA%\huetension\config.yaml on Windows) and uncomment
+# the keys you want to change. Override the location with --data-dir or
+# HUETENSION_DATA_DIR.
+#
+# Precedence: flag > HUETENSION_* env > config.yaml > built-in default.
+
+# MCP tool selection. Shared by `huetension mcp` and `huetension serve` —
+# both commands honour the same section. Bare names target tools;
+# "resources:<uri>" and "prompts:<name>" select those kinds; "kind:*" is
+# a wildcard.
+#
+# Semantics:
+#   - `enable` is a WHITELIST. When non-empty, ONLY listed tools are
+#     exposed; everything else is off.
+#   - `disable` is a BLACKLIST applied AFTER `enable`. It removes listed
+#     tools from whatever survived the whitelist.
+#   - Use one or the other. Combining them is redundant unless you
+#     whitelist `tools:*` and subtract specific tools.
+#
+# Blacklist example (start from default-enabled set, remove a few tools):
+#
+# mcp:
+#   disable:
+#     - image.extract
+#     - image.extractBatch
+#     - library.save
+#
+# Whitelist example (expose ONLY these tools, nothing else):
+#
+# mcp:
+#   enable:
+#     - color.convert
+#     - color.sort
+#     - harmony.generate
+#     - contrast.check
+#     - library.list
+#     - library.get

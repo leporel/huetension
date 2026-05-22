@@ -64,7 +64,7 @@ func newLibraryAddCmd() *cobra.Command {
 				return err
 			}
 			if !quiet {
-				fmt.Fprintf(cmd.OutOrStdout(),
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(),
 					"saved %q to the library as %q (%d colors)\n  %s\n",
 					saved.Name, saved.ID, len(saved.Colors), path)
 			}

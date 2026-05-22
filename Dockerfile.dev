@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1.7
+#
+# Source build for development. Compiles the SPA with bun, then the Go
+# binary with the embedded dist, and assembles the same slim runtime image
+# the release pipeline ships. Use this when you don't have a pre-built
+# binary lying around (`docker build -f Dockerfile.dev .`).
+
+FROM oven/bun:1 AS web
+WORKDIR /src/web
+COPY web/package.json web/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY web/ ./
+RUN bun run build
+
+FROM golang:1.26-alpine3.23 AS build
+WORKDIR /src
+RUN apk add --no-cache git
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+COPY --from=web /src/web/dist ./web/dist
+ENV CGO_ENABLED=0
+RUN go build -trimpath -ldflags "-s -w" -o /out/huetension ./cmd/huetension
+
+FROM alpine:3.23
+COPY --from=build /out/huetension /usr/local/bin/huetension
+RUN addgroup -S huetension && adduser -S -G huetension huetension
+USER huetension
+EXPOSE 8080 7337
+ENTRYPOINT ["/usr/local/bin/huetension"]
+CMD ["web", "--address", "0.0.0.0:8080"]

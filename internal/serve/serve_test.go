@@ -51,7 +51,7 @@ func TestComposesThreeSurfaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("API GET: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("API status = %d, want 200", resp.StatusCode)
 	}
@@ -67,7 +67,7 @@ func TestComposesThreeSurfaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MCP Connect: %v", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 	list, err := session.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatalf("MCP ListTools: %v", err)
@@ -91,7 +91,7 @@ func TestDisablesMCPTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MCP Connect: %v", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	list, err := session.ListTools(ctx, nil)
 	if err != nil {
@@ -122,7 +122,7 @@ func assertSPA(t *testing.T, url string) {
 	if err != nil {
 		t.Fatalf("GET %s: %v", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("%s status = %d, want 200", url, resp.StatusCode)
@@ -143,7 +143,7 @@ func TestSharedAuthGatesEverySurface(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GET %s: %v", path, err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusUnauthorized {
 			t.Errorf("%s without token: status = %d, want 401", path, resp.StatusCode)
 		}
@@ -156,7 +156,7 @@ func TestSharedAuthGatesEverySurface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authed API GET: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("authed API status = %d, want 200", resp.StatusCode)
 	}
@@ -175,7 +175,7 @@ func TestSharedAuthGatesEverySurface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authed MCP Connect: %v", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 	if _, err := session.ListTools(ctx, nil); err != nil {
 		t.Fatalf("authed MCP ListTools: %v", err)
 	}

@@ -101,7 +101,7 @@ func TestApplyLUTMissingImage(t *testing.T) {
 	base, teardown := newTestServer(t)
 	defer teardown()
 	resp := doApplyLUT(t, base, defaultApplyParams(), nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
@@ -112,7 +112,7 @@ func TestApplyLUTMissingParams(t *testing.T) {
 	defer teardown()
 	img := makeRedPNG(t)
 	resp := doApplyLUT(t, base, nil, [][]byte{img})
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
@@ -144,7 +144,7 @@ func TestApplyLUTValidationErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			resp := doApplyLUT(t, base, tc.params, [][]byte{img})
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusBadRequest {
 				body, _ := io.ReadAll(resp.Body)
 				t.Errorf("status = %d, want 400; body=%s", resp.StatusCode, body)
@@ -166,7 +166,7 @@ func TestApplyLUTSuccessBatch(t *testing.T) {
 	img1 := makeRedPNG(t)
 	img2 := makeRedPNG(t)
 	resp := doApplyLUT(t, base, defaultApplyParams(), [][]byte{img1, img2})
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", resp.StatusCode, body)

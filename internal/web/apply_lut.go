@@ -241,7 +241,7 @@ func readMultipartFile(h *multipart.FileHeader, maxBytes int64) ([]byte, string,
 	if err != nil {
 		return nil, "", fmt.Errorf("open: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	body, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
 	if err != nil {
 		return nil, "", fmt.Errorf("read: %w", err)
@@ -268,7 +268,7 @@ func runFFmpegLUT3D(ctx context.Context, bin string, cubeText []byte, images []i
 	if err != nil {
 		return nil, fmt.Errorf("mkdtemp: %w", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	cubePath := filepath.Join(dir, "lut.cube")
 	if err := os.WriteFile(cubePath, cubeText, 0o600); err != nil {

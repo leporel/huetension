@@ -1,0 +1,108 @@
+name: container
+
+# Manual only. Operator passes an existing git tag and decides whether to
+# also re-tag the image as :latest. Kept independent from release.yml so
+# either side can be retried without touching the other.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag, e.g. v1.2.3"
+        required: true
+        type: string
+      publish_latest:
+        description: "Also publish :latest"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/huetension
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install SPA deps
+        working-directory: web
+        run: bun install --frozen-lockfile
+
+      - name: Build SPA
+        working-directory: web
+        run: bun run build
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # ${TAG#v} strips an optional leading "v" so the binary reports
+      # 1.2.3 rather than v1.2.3 — matches goreleaser's .Version.
+      - name: Build linux/amd64 binary
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 0
+          TAG: ${{ inputs.tag }}
+        run: |
+          mkdir -p dist/linux_amd64
+          go build -trimpath -ldflags "-s -w -X main.version=${TAG#v}" \
+            -o dist/linux_amd64/huetension ./cmd/huetension
+
+      - name: Build linux/arm64 binary
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: 0
+          TAG: ${{ inputs.tag }}
+        run: |
+          mkdir -p dist/linux_arm64
+          go build -trimpath -ldflags "-s -w -X main.version=${TAG#v}" \
+            -o dist/linux_arm64/huetension ./cmd/huetension
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=${{ inputs.tag }}
+            type=raw,value=latest,enable=${{ inputs.publish_latest }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false

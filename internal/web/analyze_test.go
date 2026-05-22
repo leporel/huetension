@@ -78,7 +78,7 @@ func TestAnalyzeMultipartHappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(resp.Body)
 		t.Fatalf("status = %d, body = %s", resp.StatusCode, raw)
@@ -105,7 +105,7 @@ func TestAnalyzeJSONDataURI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(resp.Body)
 		t.Fatalf("status = %d, body = %s", resp.StatusCode, raw)
@@ -126,7 +126,7 @@ func TestAnalyzeBadDistanceTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		raw, _ := io.ReadAll(resp.Body)
 		t.Fatalf("status = %d (want 400), body = %s", resp.StatusCode, raw)
@@ -141,7 +141,7 @@ func TestAnalyzeEmptyJSONBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
@@ -157,7 +157,7 @@ func TestAnalyzeBadContentType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusUnsupportedMediaType {
 		t.Errorf("status = %d, want 415", resp.StatusCode)
 	}
@@ -180,7 +180,7 @@ func TestAnalyzeSpaceTakesEffectMultipart(t *testing.T) {
 		if err != nil {
 			t.Fatalf("POST: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
 			raw, _ := io.ReadAll(resp.Body)
 			t.Fatalf("status = %d, body = %s", resp.StatusCode, raw)
@@ -226,7 +226,7 @@ func TestAnalyzeMissingMultipartFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
