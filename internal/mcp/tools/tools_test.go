@@ -164,6 +164,55 @@ func TestContrastCheckUnknownAlgo(t *testing.T) {
 	}
 }
 
+func TestContrastCheckSuggestSingleAlgo(t *testing.T) {
+	_, out, err := handleContrastCheck(context.Background(), nil, ContrastCheckParams{
+		FG:      "#888888",
+		BG:      "white",
+		Algo:    "wcag21",
+		Suggest: true,
+	})
+	if err != nil {
+		t.Fatalf("handleContrastCheck: %v", err)
+	}
+	if out.Result.Suggest == nil {
+		t.Fatalf("expected Suggest result")
+	}
+	if out.Result.Suggest.Target != 4.5 {
+		t.Errorf("default wcag21 target = %v, want 4.5", out.Result.Suggest.Target)
+	}
+	if out.Result.Suggest.Suggested == nil {
+		t.Fatalf("mid-grey on white should have a passing suggestion")
+	}
+}
+
+func TestContrastCheckSuggestRejectsBoth(t *testing.T) {
+	_, _, err := handleContrastCheck(context.Background(), nil, ContrastCheckParams{
+		FG:      "black",
+		BG:      "white",
+		Algo:    "both",
+		Suggest: true,
+	})
+	if err == nil {
+		t.Errorf("suggest=true with algo=both should error")
+	}
+}
+
+func TestContrastCheckSuggestRespectsTarget(t *testing.T) {
+	_, out, err := handleContrastCheck(context.Background(), nil, ContrastCheckParams{
+		FG:      "#000000",
+		BG:      "#ffffff",
+		Algo:    "apca",
+		Suggest: true,
+		Target:  75,
+	})
+	if err != nil {
+		t.Fatalf("handleContrastCheck: %v", err)
+	}
+	if out.Result.Suggest == nil || out.Result.Suggest.Target != 75 {
+		t.Errorf("expected target=75 echoed back, got %+v", out.Result.Suggest)
+	}
+}
+
 func TestBlindnessSimulateAll(t *testing.T) {
 	_, out, err := handleBlindnessSimulate(context.Background(), nil, BlindnessSimulateParams{
 		Colors: []string{"red", "green", "blue"},

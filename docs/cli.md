@@ -72,9 +72,13 @@ Stops are positional. With 3+ stops they are spaced evenly across the gradient. 
 ```sh
 huetension contrast "#222" "#fff" --algo wcag21
 huetension contrast "#222" "#fff" --algo apca
+huetension contrast "#888" "#fff" --suggest                     # AA (4.5) default for wcag21
+huetension contrast "#888" "#000" --algo apca --suggest --target 75
 ```
 
 `--algo` is `wcag21` (default) or `apca`. The MCP `contrast.check` tool additionally accepts `both`; the CLI is one-algo-per-call.
+
+`--suggest` sweeps the foreground's OkLCH lightness against the background (chroma + hue held fixed) and returns the passing lightness nearest the original — a minimal nudge that yields a real, gamut-clamped color. `--target` overrides the threshold (defaults: `4.5` for wcag21, `60` for apca). With `--suggest` the JSON shape becomes `{ "score": ..., "suggest": { ... } }`; without it the flat score is preserved.
 
 ### `blindness` — simulate color-vision deficiency
 

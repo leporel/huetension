@@ -141,3 +141,105 @@ func TestCheckDispatch(t *testing.T) {
 		t.Errorf("unknown algo should error")
 	}
 }
+
+func TestSuggestRejectsBadInputs(t *testing.T) {
+	fg := mustParse(t, "#777777")
+	bg := mustParse(t, "#ffffff")
+	if _, err := Suggest(fg, bg, AlgoWCAG21, 0); err == nil {
+		t.Errorf("zero target should error")
+	}
+	if _, err := Suggest(fg, bg, AlgoWCAG21, -1); err == nil {
+		t.Errorf("negative target should error")
+	}
+	if _, err := Suggest(fg, bg, Algo("both"), 4.5); err == nil {
+		t.Errorf("algo=both should error for Suggest")
+	}
+	if _, err := Suggest(fg, bg, Algo("nope"), 4.5); err == nil {
+		t.Errorf("unknown algo should error")
+	}
+}
+
+func TestSuggestAlreadyPassingNudgesMinimally(t *testing.T) {
+	black := mustParse(t, "#000000")
+	white := mustParse(t, "#ffffff")
+	res, err := Suggest(black, white, AlgoWCAG21, 4.5)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if res.Suggested == nil {
+		t.Fatalf("black on white must have a passing suggestion at AA")
+	}
+	// Foreground already passes (ratio 21); the nearest passing L is L0
+	// itself, so the suggested L should sit very close to the current one.
+	if math.Abs(res.Suggested.L-res.CurrentL) > 0.05 {
+		t.Errorf("suggested L jumped from %v to %v even though current passes", res.CurrentL, res.Suggested.L)
+	}
+	if !(res.Suggested.Score >= 4.5) {
+		t.Errorf("suggested score %v should clear target 4.5", res.Suggested.Score)
+	}
+	if len(res.Samples) != suggestSamples {
+		t.Errorf("len(samples) = %d, want %d", len(res.Samples), suggestSamples)
+	}
+}
+
+func TestSuggestFailingFGFindsFix(t *testing.T) {
+	// Mid-grey on white fails WCAG AA. The fix should pull L darker until
+	// the ratio reaches the target.
+	fg := mustParse(t, "#888888")
+	bg := mustParse(t, "#ffffff")
+	res, err := Suggest(fg, bg, AlgoWCAG21, 4.5)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if res.CurrentScore >= 4.5 {
+		t.Fatalf("test premise broken: %v already passes", res.CurrentScore)
+	}
+	if res.Suggested == nil {
+		t.Fatalf("a darker grey on white should reach 4.5")
+	}
+	if res.Suggested.L >= res.CurrentL {
+		t.Errorf("on white, suggested L (%v) should be darker than current (%v)", res.Suggested.L, res.CurrentL)
+	}
+	if res.Suggested.Score < 4.5 {
+		t.Errorf("suggested score %v < target 4.5", res.Suggested.Score)
+	}
+}
+
+func TestSuggestNoPassReturnsNilSuggested(t *testing.T) {
+	// Same-color pair can never reach a meaningful target; the sweep
+	// holds chroma + hue fixed so no L produces real contrast.
+	red := mustParse(t, "red")
+	res, err := Suggest(red, red, AlgoWCAG21, 4.5)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if res.Suggested != nil {
+		t.Errorf("identical fg/bg should not yield a suggestion, got %+v", res.Suggested)
+	}
+	for _, s := range res.Samples {
+		if s.Pass {
+			t.Errorf("identical fg/bg sweep should have no passing sample, got %+v", s)
+		}
+	}
+}
+
+func TestSuggestAPCAUsesAbsLc(t *testing.T) {
+	// Reverse polarity: white on black has a strongly negative Lc.
+	// Suggest treats the magnitude as the score, so target 60 should
+	// already pass at the current L without nudging.
+	white := mustParse(t, "#ffffff")
+	black := mustParse(t, "#000000")
+	res, err := Suggest(white, black, AlgoAPCA, 60)
+	if err != nil {
+		t.Fatalf("Suggest: %v", err)
+	}
+	if res.CurrentScore < 60 {
+		t.Errorf("white on black |Lc| = %v, expected ≥ 60", res.CurrentScore)
+	}
+	if res.Suggested == nil {
+		t.Fatalf("APCA suggest should find a passing L")
+	}
+	if res.Algo != AlgoAPCA {
+		t.Errorf("result algo = %v, want apca", res.Algo)
+	}
+}

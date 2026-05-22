@@ -177,3 +177,107 @@ func Check(fg, bg color.Color, algo Algo) (any, error) {
 	}
 	return nil, fmt.Errorf("contrast: unknown algo %q", string(algo))
 }
+
+// SuggestSample is one entry of the lightness sweep run by Suggest.
+// L is OkLCH lightness (0..1), Score is the algo's positive contrast
+// magnitude (WCAG ratio or |APCA Lc|), and Pass reports whether Score
+// reached the target.
+type SuggestSample struct {
+	L     float64 `json:"l"`
+	Score float64 `json:"score"`
+	Pass  bool    `json:"pass"`
+}
+
+// Suggestion is the passing OkLCH lightness whose distance to the
+// original foreground's L is smallest — a minimal nudge that lands on a
+// gamut-clamped, displayable color.
+type Suggestion struct {
+	L     float64 `json:"l"`
+	Hex   string  `json:"hex"`
+	Score float64 `json:"score"`
+}
+
+// SuggestResult is the full output of a lightness-fix search.
+// Suggested is nil when no sampled lightness reaches the target.
+type SuggestResult struct {
+	Algo         Algo            `json:"algo"`
+	Target       float64         `json:"target"`
+	CurrentL     float64         `json:"current_l"`
+	CurrentScore float64         `json:"current_score"`
+	Samples      []SuggestSample `json:"samples"`
+	Suggested    *Suggestion     `json:"suggested,omitempty"`
+}
+
+// Lightness sweep resolution mirrors the web UI's useContrastFix —
+// 64 samples between L≈0.03 and L≈0.99 keeps the search dense without
+// crowding visualizations or wasting work on degenerate endpoints.
+const (
+	suggestSamples = 64
+	suggestLMin    = 0.03
+	suggestLMax    = 0.99
+)
+
+// Suggest sweeps the foreground's OkLCH lightness against the background,
+// scoring each candidate under algo and returning the passing lightness
+// nearest the original — a minimal nudge rather than a jump to the
+// extreme. Chroma and hue are held fixed; out-of-gamut (L, C, H) triples
+// are clamped to sRGB by FromOkLCH, so every suggestion is a real,
+// displayable color.
+//
+// target is the contrast threshold (WCAG ratio for wcag21, |Lc| for
+// apca) and must be > 0. Algo "" defaults to wcag21; "both" is rejected
+// because a fix search is single-algo by construction.
+func Suggest(fg, bg color.Color, algo Algo, target float64) (SuggestResult, error) {
+	if target <= 0 {
+		return SuggestResult{}, fmt.Errorf("contrast: suggest target must be > 0, got %g", target)
+	}
+	switch algo {
+	case "", AlgoWCAG21:
+		algo = AlgoWCAG21
+	case AlgoAPCA:
+		// ok
+	default:
+		return SuggestResult{}, fmt.Errorf("contrast: suggest does not support algo %q (want wcag21|apca)", string(algo))
+	}
+
+	L0, C, H := fg.ToOkLCH()
+	samples := make([]SuggestSample, suggestSamples)
+
+	var suggested *Suggestion
+	bestDist := math.Inf(1)
+
+	for i := range suggestSamples {
+		L := suggestLMin + (suggestLMax-suggestLMin)*float64(i)/float64(suggestSamples-1)
+		candidate := color.FromOkLCH(L, C, H)
+		s := scoreFor(candidate, bg, algo)
+		pass := s >= target
+		samples[i] = SuggestSample{L: L, Score: s, Pass: pass}
+
+		if pass {
+			d := math.Abs(L - L0)
+			if d < bestDist {
+				bestDist = d
+				suggested = &Suggestion{L: L, Hex: candidate.Hex(), Score: s}
+			}
+		}
+	}
+
+	return SuggestResult{
+		Algo:         algo,
+		Target:       target,
+		CurrentL:     L0,
+		CurrentScore: scoreFor(fg, bg, algo),
+		Samples:      samples,
+		Suggested:    suggested,
+	}, nil
+}
+
+// scoreFor returns the algo's positive contrast magnitude — WCAG ratio
+// for wcag21, |Lc| for apca. Used by Suggest so polarity (light text on
+// dark vs. dark on light) is treated symmetrically during the sweep.
+func scoreFor(fg, bg color.Color, algo Algo) float64 {
+	if algo == AlgoAPCA {
+		return APCA(fg, bg).AbsLc
+	}
+	return WCAG21(fg, bg).Ratio
+}

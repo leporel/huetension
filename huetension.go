@@ -161,11 +161,15 @@ var (
 	MultiStopGradient = gradient.MultiStop
 )
 
-// Contrast surface — WCAG 2.1 ratio + APCA Lc score.
+// Contrast surface — WCAG 2.1 ratio + APCA Lc score, plus an OkLCH
+// lightness-fix search for failing foreground/background pairs.
 type (
-	ContrastAlgo = contrast.Algo
-	WCAG21Result = contrast.WCAG21Result
-	APCAResult   = contrast.APCAResult
+	ContrastAlgo      = contrast.Algo
+	WCAG21Result      = contrast.WCAG21Result
+	APCAResult        = contrast.APCAResult
+	ContrastSuggest   = contrast.SuggestResult
+	ContrastSample    = contrast.SuggestSample
+	ContrastSuggested = contrast.Suggestion
 )
 
 const (
@@ -174,9 +178,10 @@ const (
 )
 
 var (
-	WCAG21        = contrast.WCAG21
-	APCA          = contrast.APCA
-	CheckContrast = contrast.Check
+	WCAG21          = contrast.WCAG21
+	APCA            = contrast.APCA
+	CheckContrast   = contrast.Check
+	SuggestContrast = contrast.Suggest
 )
 
 // Blindness surface — Brettel-Viénot-Mollon CVD simulation.

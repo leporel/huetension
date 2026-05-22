@@ -14,7 +14,7 @@ Same JSON wire contract as the CLI's `--format json` mode and the REST API, so a
 | `color.sort` | Sort by luminance, lightness, OkLab L, hue, saturation, or frequency. |
 | `harmony.generate` | Complementary / analogous / triadic / split / tetradic / square / double-complementary / compound / monochromatic / shades. |
 | `gradient.generate` | Two-endpoint or N-stop gradients in OkLab/OkLCH/Lab/RGB/HSL with optional easing. |
-| `contrast.check` | WCAG 2.1, APCA, or both. |
+| `contrast.check` | WCAG 2.1, APCA, or both. Pass `suggest=true` (single-algo only) for the nearest passing OkLCH lightness for the foreground. |
 | `blindness.simulate` | Protanopia / deuteranopia / tritanopia / achromatopsia. |
 | `palette.random` | Random palette, optionally driven by a harmony rule; deterministic when seeded. |
 | `export.css` | CSS custom properties / SCSS / LESS variables. |

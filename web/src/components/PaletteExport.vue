@@ -425,7 +425,11 @@ watch(isLUT, (active) => {
 
 // Reset notation when format changes to a non-text format.
 watch(format, (newFormat) => {
-    if (!["css", "scss", "less", "tailwind", "txt"].includes(newFormat as string)) {
+    if (
+        !["css", "scss", "less", "tailwind", "txt"].includes(
+            newFormat as string,
+        )
+    ) {
         colorNotation.value = "";
     }
 });
@@ -774,16 +778,6 @@ function download(): void {
                     </div>
                     <div class="hald-test-cell">
                         <span class="hald-test-label">Graded</span>
-                        <div class="hald-test-frame">
-                            <img
-                                v-if="gradedUrl"
-                                :src="gradedUrl"
-                                alt="graded"
-                            />
-                            <span v-else class="hald-test-empty-text">
-                                {{ applyLoading ? "Applying…" : "Waiting…" }}
-                            </span>
-                        </div>
                         <!-- Reference hue spectrum graded through the same LUT —
                  thin strip under the test result so the user can see
                  the grade's effect across the full hue range. -->
@@ -795,6 +789,16 @@ function download(): void {
                                 :src="gradedSpectrumUrl"
                                 alt="graded spectrum"
                             />
+                        </div>
+                        <div class="hald-test-frame">
+                            <img
+                                v-if="gradedUrl"
+                                :src="gradedUrl"
+                                alt="graded"
+                            />
+                            <span v-else class="hald-test-empty-text">
+                                {{ applyLoading ? "Applying…" : "Waiting…" }}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -1321,6 +1325,7 @@ function download(): void {
  * to read as a "sample" rather than a full preview. */
 .hald-test-spectrum {
     margin-top: 4px;
+    margin-bottom: 4px;
     width: 100%;
     height: 24px;
     border: 1px solid var(--line-soft);

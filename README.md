@@ -21,7 +21,7 @@ A color palette toolkit for designers, frontend devs, and photographers. One bin
 
 ### 🔍 Analysis
 
--  **Contrast scoring** — WCAG 2.1 and APCA side-by-side.
+-  **Contrast scoring** — WCAG 2.1 and APCA side-by-side. Foreground "analyse" mode (`--suggest`) finds the nearest passing OkLCH lightness for a failing fg / bg pair.
 -  **Color-vision-deficiency simulation** — protanopia, deuteranopia, tritanopia, achromatopsia. Live preview in the SPA.
 -  **Image color-distribution strips** by color space and distance metric (`analyze`).
 
