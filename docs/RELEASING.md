@@ -27,7 +27,7 @@ git add web/dist
 
 ```sh
 go test ./...
-golangci-lint run            # optional but recommended
+golangci-lint-v2 run            # optional but recommended
 ```
 
 ## 4. PR, review, merge
