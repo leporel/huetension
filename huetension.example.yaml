@@ -1,26 +1,97 @@
-# huetension.example.yaml — annotated example config.
+# huetension.example.yaml - annotated example config.
 #
-# Copy to the data directory (defaults: ~/.config/huetension/config.yaml on
-# Linux/macOS, %APPDATA%\huetension\config.yaml on Windows) and uncomment
-# the keys you want to change. Override the location with --data-dir or
-# HUETENSION_DATA_DIR.
+# Copy this file to the data directory as config.yaml.
+#
+# Default data directory:
+#   Linux/macOS: ~/.config/huetension/
+#   Windows:     %APPDATA%\huetension\
+#
+# Override the data directory with --data-dir or HUETENSION_DATA_DIR.
 #
 # Precedence: flag > HUETENSION_* env > config.yaml > built-in default.
+#
+# Important: at the moment the program only reads the `mcp:` section from
+# config.yaml. Other command settings are configured through flags/env vars.
 
-# MCP tool selection. Shared by `huetension mcp` and `huetension serve` —
-# both commands honour the same section. Bare names target tools;
-# "resources:<uri>" and "prompts:<name>" select those kinds; "kind:*" is
-# a wildcard.
+# Environment variables recognised at runtime:
 #
-# Semantics:
-#   - `enable` is a WHITELIST. When non-empty, ONLY listed tools are
-#     exposed; everything else is off.
-#   - `disable` is a BLACKLIST applied AFTER `enable`. It removes listed
-#     tools from whatever survived the whitelist.
-#   - Use one or the other. Combining them is redundant unless you
-#     whitelist `tools:*` and subtract specific tools.
+#   HUETENSION_DATA_DIR
+#     Overrides the data directory that contains config.yaml and library.json.
+#     Equivalent to --data-dir. The directory must already exist when set.
 #
-# Blacklist example (start from default-enabled set, remove a few tools):
+#   HUETENSION_MCP_ENABLE
+#     Comma-separated equivalent of mcp.enable.
+#     Example: HUETENSION_MCP_ENABLE=color.convert,harmony.generate
+#
+#   HUETENSION_MCP_DISABLE
+#     Comma-separated equivalent of mcp.disable.
+#     Example: HUETENSION_MCP_DISABLE=image.extract,image.extractBatch
+#
+#   NO_COLOR
+#     Disables ANSI color in text output when the variable is present.
+#     Any value is accepted; an empty value still disables color.
+#
+# Developer/test-only environment variables:
+#
+#   HUETENSION_GEN_PARITY=1
+#     Enables parity fixture regeneration in selected Go tests. It is not
+#     consumed by normal CLI, web, serve, or MCP runtime paths.
+
+# MCP selector configuration. Shared by `huetension mcp` and
+# `huetension serve`; both commands use this same section to decide which
+# MCP tools, resources, and prompts are exposed.
+mcp:
+  # Whitelist. When non-empty for a selector kind, only listed entries of
+  # that kind are exposed. Leave empty to expose every default-enabled
+  # entry of that kind.
+  #
+  # Environment variable: HUETENSION_MCP_ENABLE
+  enable: []
+
+  # Blacklist. Applied after `enable`; listed entries are removed from the
+  # exposed set. Leave empty to disable nothing.
+  #
+  # Environment variable: HUETENSION_MCP_DISABLE
+  disable: []
+
+# Selector syntax for mcp.enable / mcp.disable:
+#
+#   color.convert                 # bare names select tools
+#   tools:color.convert           # explicit tool selector
+#   tools:*                       # all tools
+#   resources:huetension://schemas/v1
+#   resources:*                   # all resources
+#   prompts:extract-from-mood
+#   prompts:*                     # all prompts
+#
+# Known tool selectors:
+#
+#   - color.convert
+#   - color.sort
+#   - harmony.generate
+#   - gradient.generate
+#   - contrast.check
+#   - blindness.simulate
+#   - palette.random
+#   - export.css
+#   - export.tailwind
+#   - image.extract
+#   - image.extractBatch
+#   - library.categories
+#   - library.list
+#   - library.get
+#   - library.save
+#
+# Known resource selectors:
+#
+#   - resources:huetension://schemas/v1
+#
+# Known prompt selectors:
+#
+#   - prompts:extract-from-mood
+#   - prompts:audit-contrast
+#
+# Common blacklist example:
 #
 # mcp:
 #   disable:
@@ -28,7 +99,7 @@
 #     - image.extractBatch
 #     - library.save
 #
-# Whitelist example (expose ONLY these tools, nothing else):
+# Common whitelist example:
 #
 # mcp:
 #   enable:
@@ -38,3 +109,14 @@
 #     - contrast.check
 #     - library.list
 #     - library.get
+#
+# Whitelist everything, then subtract specific entries:
+#
+# mcp:
+#   enable:
+#     - tools:*
+#     - resources:*
+#     - prompts:*
+#   disable:
+#     - image.extract
+#     - image.extractBatch
