@@ -1,6 +1,6 @@
 # huetension
 
-A color palette toolkit for designers, frontend devs, and photographers. One binary, three frontends — **CLI**, **MCP server**, and **Web UI** — sharing a single pure-Go core.
+A color palette toolkit for designers, frontend devs, and photographers. One binary, three modes — **CLI**, **MCP server**, and **Web UI** — sharing a single pure-Go core.
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/leporel/huetension)](https://goreportcard.com/report/github.com/leporel/huetension)
 [![Go Reference](https://pkg.go.dev/badge/github.com/leporel/huetension)](https://pkg.go.dev/github.com/leporel/huetension)
