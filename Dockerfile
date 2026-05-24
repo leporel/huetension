@@ -11,7 +11,8 @@
 FROM alpine:3.23
 ARG TARGETARCH
 COPY dist/linux_${TARGETARCH}/huetension /usr/local/bin/huetension
-RUN addgroup -S huetension && adduser -S -G huetension huetension
+RUN apk add --no-cache ffmpeg \
+ && addgroup -S huetension && adduser -S -G huetension huetension
 USER huetension
 EXPOSE 8080 7337
 ENTRYPOINT ["/usr/local/bin/huetension"]

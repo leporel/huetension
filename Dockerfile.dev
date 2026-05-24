@@ -24,7 +24,8 @@ RUN go build -trimpath -ldflags "-s -w" -o /out/huetension ./cmd/huetension
 
 FROM alpine:3.23
 COPY --from=build /out/huetension /usr/local/bin/huetension
-RUN addgroup -S huetension && adduser -S -G huetension huetension
+RUN apk add --no-cache ffmpeg \
+ && addgroup -S huetension && adduser -S -G huetension huetension
 USER huetension
 EXPOSE 8080 7337
 ENTRYPOINT ["/usr/local/bin/huetension"]
