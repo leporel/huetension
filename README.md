@@ -11,6 +11,28 @@ A color palette toolkit for designers, frontend devs, and photographers. One bin
 
 ![huetension web UI](.github/preview.jpg)
 
+## Table of Contents
+
+- [Features](#features)
+- [Three modes](#three-modes)
+  - [CLI](#cli)
+  - [MCP server](#mcp-server)
+  - [Web UI](#web-ui)
+- [Install](#install)
+  - [`go install`](#go-install)
+  - [Pre-built archives](#pre-built-archives)
+  - [Docker](#docker)
+  - [From source](#from-source)
+- [CLI quick reference](#cli-quick-reference)
+- [MCP usage](#mcp-usage)
+- [Web UI tour](#web-ui-tour)
+- [Configuration](#configuration)
+- [Library](#library)
+- [Development](#development)
+- [License](#license)
+- [Inspirations](#inspirations)
+- [Acknowledgements](#acknowledgements)
+
 ## Features
 
 ### 🎨 Palette generation
