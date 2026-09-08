@@ -59,7 +59,7 @@ func TestImageExtractFromData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleImageExtract: %v", err)
 	}
-	if out.Result.Size == 0 {
+	if out.Result.Palette.Size == 0 {
 		t.Fatalf("empty palette")
 	}
 	if out.Tool != "image.extract" {
@@ -365,7 +365,7 @@ func TestImageExtractSoftPreset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleImageExtract: %v", err)
 	}
-	if out.Result.Size == 0 {
+	if out.Result.Palette.Size == 0 {
 		t.Fatalf("empty palette")
 	}
 	params := out.Result.Metadata.Params

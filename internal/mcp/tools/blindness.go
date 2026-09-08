@@ -8,6 +8,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/leporel/huetension/internal/blindness"
+	"github.com/leporel/huetension/internal/exporter"
 )
 
 // BlindnessSimulateParams is the typed input for blindness.simulate.
@@ -62,7 +63,7 @@ func handleBlindnessSimulate(_ context.Context, _ *sdk.CallToolRequest, p Blindn
 		for _, k := range blindness.AllKinds {
 			variants = append(variants, BlindnessKindResult{
 				Kind:   string(k),
-				Colors: encodeColors(all[k]),
+				Colors: exporter.EncodeColors(all[k]),
 			})
 		}
 	} else {
@@ -72,7 +73,7 @@ func handleBlindnessSimulate(_ context.Context, _ *sdk.CallToolRequest, p Blindn
 		}
 		variants = []BlindnessKindResult{{
 			Kind:   kind,
-			Colors: encodeColors(out),
+			Colors: exporter.EncodeColors(out),
 		}}
 	}
 

@@ -121,6 +121,19 @@ func TestLUTEndpointErrors(t *testing.T) {
 			"format": "cube", "colors": []string{"not-a-color"},
 			"radius": 0.15, "distribution": 0.5, "intensity": 0.8,
 		}},
+		{"size above the web cap", map[string]any{
+			"format": "cube", "colors": []string{"#ff0000"},
+			"radius": 0.15, "distribution": 0.5, "intensity": 0.8,
+			"size": lutMaxWebSize + 1,
+		}},
+		{"grade compression > 1", map[string]any{
+			"format": "cube", "colors": []string{"#ff0000"},
+			"method": "grade", "compression": 1.5, "mute": 0.3,
+		}},
+		{"grade mute negative", map[string]any{
+			"format": "cube", "colors": []string{"#ff0000"},
+			"method": "grade", "compression": 0.7, "mute": -0.1,
+		}},
 	}
 
 	for _, tc := range cases {
@@ -130,5 +143,41 @@ func TestLUTEndpointErrors(t *testing.T) {
 				t.Errorf("status = %d, want 400", resp.StatusCode)
 			}
 		})
+	}
+}
+
+// TestLUTEndpointGrade drives the default SPA method end-to-end and checks
+// the envelope echoes only the grade knobs.
+func TestLUTEndpointGrade(t *testing.T) {
+	base, teardown := newTestServer(t)
+	defer teardown()
+
+	var env struct {
+		lutEnvelope
+		Params map[string]any `json:"params"`
+	}
+	resp := doPOST(t, base, "/api/v1/lut", map[string]any{
+		"format":      "cube",
+		"colors":      []string{"#1a8c96", "#e67828"},
+		"method":      "grade",
+		"compression": 0.7,
+		"mute":        0.3,
+		"size":        5,
+	}, &env)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: %d", resp.StatusCode)
+	}
+	if !strings.Contains(env.Result.Content, "LUT_3D_SIZE 5") {
+		t.Errorf("missing LUT_3D_SIZE in content: %s", env.Result.Content)
+	}
+	if env.Params["method"] != "grade" {
+		t.Errorf("params.method = %v, want grade", env.Params["method"])
+	}
+	if _, ok := env.Params["compression"]; !ok {
+		t.Error("params should echo compression for the grade method")
+	}
+	if _, ok := env.Params["radius"]; ok {
+		t.Error("params should not echo K-NN knobs for the grade method")
 	}
 }

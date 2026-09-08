@@ -8,6 +8,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/leporel/huetension/internal/color"
+	"github.com/leporel/huetension/internal/exporter"
 	"github.com/leporel/huetension/internal/gradient"
 	"github.com/leporel/huetension/internal/palette"
 )
@@ -83,7 +84,7 @@ func handleGradientGenerate(_ context.Context, _ *sdk.CallToolRequest, p Gradien
 		Schema: schemaVersion,
 		Tool:   "gradient.generate",
 		Params: p,
-		Result: encodePalette(pal),
+		Result: exporter.EncodeResult(pal),
 	}, nil
 }
 

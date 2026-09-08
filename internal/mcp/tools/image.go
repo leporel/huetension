@@ -9,6 +9,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/leporel/huetension/internal/exporter"
 	"github.com/leporel/huetension/internal/extract"
 	"github.com/leporel/huetension/internal/imageio"
 	"github.com/leporel/huetension/internal/palette"
@@ -25,9 +26,9 @@ type ImageExtractParams struct {
 
 	// Extraction options (subset of the CLI extract flags). All optional;
 	// internal/extract applies its own defaults when zero.
-	Method             string  `json:"method,omitempty" jsonschema:"extraction method: soft|kmeans|okkmeans|mediancut|softk|octree|popularity|wu|dbscan|wkmeans (default: soft)"`
-	Size               int     `json:"size,omitempty" jsonschema:"palette size (default 5, max 32)"`
-	Resize             int     `json:"resize,omitempty" jsonschema:"resize longest image side to this many pixels (default 512; 0 disables)"`
+	Method             string `json:"method,omitempty" jsonschema:"extraction method: soft|kmeans|okkmeans|mediancut|softk|octree|popularity|wu|dbscan|wkmeans (default: soft)"`
+	Size               int    `json:"size,omitempty" jsonschema:"palette size (default 5, max 32)"`
+	Resize             int    `json:"resize,omitempty" jsonschema:"resize longest image side to this many pixels (default 512; 0 disables)"`
 	SortBy             string `json:"sort_by,omitempty" jsonschema:"final palette sort: luminance|lightness|okl|hue|saturation|frequency|none"`
 	Reverse            bool   `json:"reverse,omitempty" jsonschema:"reverse the sort order"`
 	AlphaMaskThreshold int    `json:"alpha_mask_threshold,omitempty" jsonschema:"drop pixels with alpha < threshold (0..255)"`
@@ -226,7 +227,7 @@ func handleImageExtract(ctx context.Context, p ImageExtractParams, sb ImageSandb
 		Schema: schemaVersion,
 		Tool:   "image.extract",
 		Params: p,
-		Result: encodePalette(pal),
+		Result: exporter.EncodeResult(pal),
 	}, nil
 }
 
@@ -316,7 +317,7 @@ func handleImageExtractBatch(ctx context.Context, p ImageExtractBatchParams, sb 
 				results[i] = ImageExtractBatchEntry{Source: src, Error: err.Error()}
 				return
 			}
-			pr := encodePalette(pal)
+			pr := exporter.EncodeResult(pal)
 			results[i] = ImageExtractBatchEntry{Source: src, Result: &pr}
 		}(i, x.loaded, x.source)
 	}

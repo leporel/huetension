@@ -12,14 +12,15 @@ import (
 // LUT generation methods. The empty string defaults to MethodKNN for
 // backward compatibility with callers that predate the RBF rewrite.
 const (
-	MethodKNN = "knn"
-	MethodRBF = "rbf"
+	MethodKNN   = "knn"
+	MethodRBF   = "rbf"
+	MethodGrade = "grade"
 )
 
 // Options controls LUT generation behavior.
 type Options struct {
 	Size              int    // grid edge per channel (default 33)
-	Method            string // "knn" (legacy K-nearest) or "rbf" (smooth Gaussian over all palette colours); empty defaults to "knn"
+	Method            string // "grade" (hue-wheel compression), "rbf" (smooth Gaussian over all palette colours) or "knn" (legacy K-nearest); empty defaults to "knn"
 	IncludeSaturation bool   // shift chroma as well as hue (default false → hue only, chroma frozen)
 
 	// K-NN method knobs (used when Method == "knn" or empty).
@@ -36,6 +37,12 @@ type Options struct {
 	Reach     float64 // kernel σ in OkLab — how far each palette colour reaches (>0, default 0.20)
 	Sharpness float64 // kernel exponent p in exp(-(d/σ)^p); p=2 Gaussian, lower = softer mix, higher = closer to nearest-only (>0, default 2.0)
 	Strength  float64 // pull factor 0..1 (default 0.90)
+
+	// Grade method knobs (used when Method == "grade"). Lightness is never
+	// touched; the palette only defines hue spokes that the hue wheel is
+	// squeezed onto, plus (with IncludeSaturation) target chroma.
+	Compression float64 // 0..1 how hard hues are squeezed onto the palette spokes; 0 = identity (default 0.70)
+	Mute        float64 // 0..1 chroma reduction for hues that sit between spokes (default 0.30)
 }
 
 // LUT is a 3D lookup table for color grading.
@@ -45,8 +52,8 @@ type LUT struct {
 }
 
 // Generate dispatches to the selected algorithm. Method "" defaults to
-// "knn" so pre-existing callers keep their behaviour; the new "rbf"
-// path is opt-in and uses the Reach/Sharpness/Strength knobs instead.
+// "knn" so pre-existing library callers keep their behaviour; the CLI and
+// SPA default to "grade". Each method reads only its own knob group.
 func Generate(p *palette.Palette, opts Options) (*LUT, error) {
 	if opts.Size < 2 {
 		opts.Size = 33
@@ -63,8 +70,10 @@ func Generate(p *palette.Palette, opts Options) (*LUT, error) {
 		return generateKNN(p, opts)
 	case MethodRBF:
 		return generateRBF(p, opts)
+	case MethodGrade:
+		return generateGrade(p, opts)
 	}
-	return nil, fmt.Errorf("lut: unknown method %q (want %q or %q)", opts.Method, MethodKNN, MethodRBF)
+	return nil, fmt.Errorf("lut: unknown method %q (want %q, %q or %q)", opts.Method, MethodGrade, MethodRBF, MethodKNN)
 }
 
 // identityLUT emits exact grid identity colours via FromRGB01. Used by
@@ -168,9 +177,14 @@ func generateKNN(p *palette.Palette, opts Options) (*LUT, error) {
 		k := opts.BlendNeighbors
 		kNearest := distances[:k]
 
-		// Falloff shape on the nearest colour's distance.
+		// Falloff shape on the nearest colour's distance. A zero radius is
+		// an empty pull zone: only exact matches (distance 0) would
+		// qualify, and 0/0 is NaN, so treat every node as fully outside.
 		d0 := kNearest[0].distance
-		normalizedDist := math.Min(d0/opts.Radius, 1.0)
+		normalizedDist := 1.0
+		if opts.Radius > 0 {
+			normalizedDist = math.Min(d0/opts.Radius, 1.0)
+		}
 		exponent := 1.0 + (opts.Distribution-0.5)*2
 		falloff := math.Pow(1.0-normalizedDist, exponent)
 		pullStrength := falloff * opts.Intensity

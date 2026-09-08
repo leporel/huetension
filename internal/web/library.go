@@ -62,11 +62,10 @@ type libraryState struct {
 	readOnly bool
 }
 
-// newLibraryState wraps the loaded index, its on-disk path, and the
-// server's read-only posture. idx may be nil (no catalogue configured);
-// path may be empty (no data directory); readOnly true disables saving.
-func newLibraryState(idx *library.Index, path string, readOnly bool) *libraryState {
-	return &libraryState{store: library.NewStore(idx, path), readOnly: readOnly}
+// newLibraryState pairs the catalogue store with the server's read-only
+// posture. readOnly true disables saving even when the store can persist.
+func newLibraryState(store *library.Store, readOnly bool) *libraryState {
+	return &libraryState{store: store, readOnly: readOnly}
 }
 
 // current returns the catalogue index visible right now.

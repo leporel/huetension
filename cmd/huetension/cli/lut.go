@@ -29,6 +29,10 @@ type lutFlags struct {
 	reach     float64
 	sharpness float64
 	strength  float64
+
+	// Grade method.
+	compression float64
+	mute        float64
 }
 
 func newLutCmd() *cobra.Command {
@@ -43,7 +47,10 @@ func newLutCmd() *cobra.Command {
 			"standard HALD layout despite the similar look). " +
 			"With no positional args, reads one color per line from stdin.\n\n" +
 			"Use --format to select output (cube|png, default cube). " +
-			"Pick the algorithm with --method (rbf|knn, default rbf). The smooth RBF path blends every " +
+			"Pick the algorithm with --method (grade|rbf|knn, default grade). The grade path squeezes the " +
+			"hue wheel onto the palette's hues like a vectorscope compression — lightness is never touched, " +
+			"--compression sets how hard hues snap to the palette and --mute desaturates hues that fall " +
+			"between palette colours. The smooth RBF path blends every " +
 			"palette colour through a Gaussian-like kernel in OkLab a/b — controlled by --reach " +
 			"(kernel σ), --sharpness (kernel exponent, p=2 is Gaussian, higher = closer to nearest-only), " +
 			"and --strength (pull factor 0..1). The legacy K-NN path takes --radius, --distribution, " +
@@ -59,12 +66,16 @@ func newLutCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&lf.format, "format", "cube", "output format (cube|png)")
-	cmd.Flags().StringVar(&lf.method, "method", "rbf", "algorithm: rbf (smooth Gaussian over all palette colours) | knn (legacy K-nearest)")
+	cmd.Flags().StringVar(&lf.method, "method", "grade", "algorithm: grade (hue-wheel compression, lightness preserved) | rbf (smooth Gaussian over all palette colours) | knn (legacy K-nearest)")
 	cmd.Flags().BoolVar(&lf.saturation, "saturation", false, "also shift chroma (default: hue only — chroma frozen)")
 	cmd.Flags().StringVar(&lf.size, "size", "", "cube edge: integer or preset (obs|ffmpeg|standard|small|medium|large). Default: 33 cube, 64 png")
 	cmd.Flags().StringVarP(&lf.output, "output", "o", "-", "output file; use \"-\" for stdout")
 
-	// RBF knobs (default method).
+	// Grade knobs (default method).
+	cmd.Flags().Float64Var(&lf.compression, "compression", 0.70, "grade: how hard hues are squeezed onto the palette (0..1; 0 = identity)")
+	cmd.Flags().Float64Var(&lf.mute, "mute", 0.30, "grade: desaturate hues that sit between palette colours (0..1)")
+
+	// RBF knobs.
 	cmd.Flags().Float64Var(&lf.reach, "reach", 0.20, "RBF: kernel σ in OkLab — how far each palette colour reaches (>0)")
 	cmd.Flags().Float64Var(&lf.sharpness, "sharpness", 2.0, "RBF: kernel exponent p in exp(-(d/σ)^p); 2=Gaussian, higher=sharper")
 	cmd.Flags().Float64Var(&lf.strength, "strength", 0.90, "RBF: pull factor (0..1)")
@@ -100,11 +111,11 @@ func runLUT(args []string, lf *lutFlags) error {
 
 	method := strings.ToLower(strings.TrimSpace(lf.method))
 	switch method {
-	case "", lut.MethodRBF:
-		method = lut.MethodRBF
-	case lut.MethodKNN:
+	case "", lut.MethodGrade:
+		method = lut.MethodGrade
+	case lut.MethodRBF, lut.MethodKNN:
 	default:
-		return fmt.Errorf("unknown --method %q (want rbf|knn)", lf.method)
+		return fmt.Errorf("unknown --method %q (want grade|rbf|knn)", lf.method)
 	}
 
 	lutSize, err := resolveLutSizeFlag(lf.size, format)
@@ -123,6 +134,8 @@ func runLUT(args []string, lf *lutFlags) error {
 		Reach:             lf.reach,
 		Sharpness:         lf.sharpness,
 		Strength:          lf.strength,
+		Compression:       lf.compression,
+		Mute:              lf.mute,
 	}
 
 	p := palette.New(colors)

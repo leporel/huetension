@@ -56,7 +56,7 @@ A color palette toolkit for designers, frontend devs, and photographers. One bin
 
 ### 🎬 3D LUT
 
--  **`.cube` LUT** — palette-driven, two grading methods: **Smooth** (RBF over OkLab) or **Layered** (K-NN over OkLCH).
+-  **`.cube` LUT** — palette-driven, three grading methods: **Grade** (default — squeezes the hue wheel onto the palette's hues like a vectorscope compression, lightness untouched), **Smooth** (RBF over OkLab) or **Layered** (K-NN over OkLCH).
 -  **LUT Texture PNG** — the cube laid out as a 2D image, handy for OBS-style real-time color grading and other tools that accept a texture LUT.
 -  **In-browser preview** on your own image — the backend pipes the `.cube` text into ffmpeg's `lut3d` filter, so `ffmpeg` must be on the server's `PATH`.
 
@@ -193,7 +193,7 @@ Build order matters: the SPA assets are embedded, so `bun run build` must run be
 | `convert` / `sort` | Color-list utilities; read stdin when no args. |
 | `random` | Generate a random palette, optionally harmonised. |
 | `css` / `tailwind` | Export-only conveniences. |
-| `lut` | Palette-driven 3D LUT (`.cube`) — RBF or K-NN grading. |
+| `lut` | Palette-driven 3D LUT (`.cube`) — grade (default), RBF or K-NN. |
 | `library` / `library add` | Manage the on-disk palette catalogue. |
 | `mcp` / `web` / `serve` | Long-running servers (see below). |
 | `version` / `completion` | Print version, generate shell completions. |

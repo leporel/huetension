@@ -114,7 +114,19 @@ echo -e "#222\n#fff" | huetension tailwind --shades 11
 
 ### `lut` — palette-driven 3D LUT
 
-Generates a `.cube` LUT from a palette (or applies one to an image). Two grading methods: `rbf` (smooth, default) and `knn` (legacy layered).
+Generates a `.cube` LUT (or a 2D LUT texture PNG) from a palette. Three grading methods:
+
+- `grade` (default) — squeezes the hue wheel onto the palette's hues, the way a colourist compresses a vectorscope. Lightness is never touched, so the image keeps its tonality; neutral palette entries are ignored as hue anchors. `--compression` (0..1, default 0.70) sets how hard hues snap to the palette; `--mute` (0..1, default 0.30) desaturates hues that fall between palette colours instead of showing intermediate tints. `--saturation` additionally pulls chroma toward the palette's own.
+- `rbf` — smooth Gaussian-like blend of every palette colour in OkLab (`--reach`, `--sharpness`, `--strength`).
+- `knn` — legacy K-nearest layered look (`--radius`, `--distribution`, `--intensity`, `--blend`).
+
+```sh
+huetension lut "#1a8c96" "#e67828" -o teal-orange.cube
+huetension lut --compression 0.9 --mute 0.5 "#1a8c96" "#e67828" -o strong.cube
+huetension lut --method rbf --reach 0.25 "#1a8c96" "#e67828" -o smooth.cube
+```
+
+Over the REST API (`POST /api/v1/lut`, `POST /api/v1/apply-lut`) an omitted `method` still resolves to `knn` so older clients keep their output; pass `"method": "grade"` explicitly.
 
 ### `library` / `library add` — manage the palette catalogue
 

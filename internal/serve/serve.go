@@ -104,10 +104,11 @@ type Config struct {
 	// surfaces respond as unconfigured (503 / tool error).
 	Library *library.Index
 
-	// LibraryPath is the on-disk library.json that the REST
-	// POST /library/palette endpoint persists saved palettes to. Empty
-	// disables saving (the route answers 503). The MCP surface is
-	// read-only and ignores this.
+	// LibraryPath is the on-disk library.json that both the REST
+	// POST /library/palette endpoint and the MCP library.save tool
+	// persist saved palettes to. Empty disables saving (503 / tool
+	// error). Both surfaces share one store built from Library +
+	// LibraryPath so a save on either side is visible to the other.
 	LibraryPath string
 }
 
@@ -198,17 +199,21 @@ func BuildHandler(cfg Config) (http.Handler, error) {
 		return nil, err
 	}
 
+	// One catalogue store for both surfaces. Each handler would otherwise
+	// build its own snapshot over the same library.json, and a save from
+	// one side would rewrite the file without the other side's entries.
+	libraryStore := library.NewStore(cfg.Library, cfg.LibraryPath)
+
 	// Web handler: REST under apiBase + SPA at "/", no middleware (serve
 	// wraps the composition once below). AuthToken / CORSOrigins are left
 	// off Config deliberately — the outer wrap owns them.
 	webHandler, err := web.Handler(web.Config{
-		Version:     cfg.Version,
-		BasePath:    apiBase,
-		Logger:      logger,
-		Sandbox:     cfg.Sandbox,
-		Library:     cfg.Library,
-		LibraryPath: cfg.LibraryPath,
-		DevProxy:    cfg.DevProxy,
+		Version:      cfg.Version,
+		BasePath:     apiBase,
+		Logger:       logger,
+		Sandbox:      cfg.Sandbox,
+		LibraryStore: libraryStore,
+		DevProxy:     cfg.DevProxy,
 	})
 	if err != nil {
 		return nil, err
@@ -229,8 +234,7 @@ func BuildHandler(cfg Config) (http.Handler, error) {
 		AllowHosts:           cfg.Sandbox.AllowHosts,
 		MaxImageBytes:        cfg.Sandbox.MaxImageBytes,
 		BlockPrivateNetworks: cfg.Sandbox.BlockPrivateNetworks,
-		Library:              cfg.Library,
-		LibraryPath:          cfg.LibraryPath,
+		LibraryStore:         libraryStore,
 	})
 	if err != nil {
 		return nil, err

@@ -76,6 +76,12 @@ type Config struct {
 	// save endpoint then answers 503 while the read endpoints still work.
 	LibraryPath string
 
+	// LibraryStore, when set, is used instead of building a store from
+	// Library + LibraryPath. The combined `serve` command passes one store
+	// to both the REST and MCP surfaces so a save on either side is
+	// visible to, and never overwritten by, the other.
+	LibraryStore *library.Store
+
 	// DevProxy, when non-empty, makes the server reverse-proxy every non-API
 	// request to this URL (e.g. "http://localhost:5173" for the Vite dev
 	// server) instead of serving the embedded SPA. API routes under BasePath
@@ -85,4 +91,13 @@ type Config struct {
 	// WebSocket upgrades (Vite HMR) pass through via httputil's default
 	// reverse-proxy behaviour.
 	DevProxy string
+}
+
+// libraryStore returns the shared store when one was injected, otherwise
+// a fresh store over the configured index and path.
+func (c Config) libraryStore() *library.Store {
+	if c.LibraryStore != nil {
+		return c.LibraryStore
+	}
+	return library.NewStore(c.Library, c.LibraryPath)
 }

@@ -4,16 +4,19 @@ import { api, type RequestOptions } from './client';
  *  HALD CLUT image (base64-encoded). */
 export type LutFormat = 'cube' | 'png';
 
-/** LUT generation algorithm. `rbf` is the smooth default (Gaussian-like
- *  kernel over every palette colour, blended in OkLab a/b); `knn` is the
- *  legacy K-nearest path that takes radius/distribution/intensity/blend. */
-export type LutMethod = 'rbf' | 'knn';
+/** LUT generation algorithm. `grade` is the default — hue-wheel
+ *  compression onto the palette's hues with lightness preserved, driven by
+ *  compression/mute; `rbf` is the smooth Gaussian-like kernel over every
+ *  palette colour blended in OkLab a/b (reach/sharpness/strength); `knn`
+ *  is the legacy K-nearest path (radius/distribution/intensity/blend). */
+export type LutMethod = 'grade' | 'rbf' | 'knn';
 
 export interface LutRequest {
   colors: string[];
   format: LutFormat;
   /** Algorithm. Omit or `"knn"` for the legacy K-nearest path; `"rbf"`
-   *  for the smooth Gaussian path that takes reach/sharpness/strength. */
+   *  for the smooth Gaussian path that takes reach/sharpness/strength;
+   *  `"grade"` for hue-wheel compression that takes compression/mute. */
   method?: LutMethod;
   include_saturation: boolean;
   /** Cube grid edge per channel. For `cube` any size ≥ 2 works (default
@@ -31,6 +34,10 @@ export interface LutRequest {
   reach?: number;
   sharpness?: number;
   strength?: number;
+
+  // Grade knobs (used when method is "grade").
+  compression?: number;
+  mute?: number;
 }
 
 export interface LutResult {
@@ -77,6 +84,10 @@ export interface ApplyLutParams {
   reach?: number;
   sharpness?: number;
   strength?: number;
+
+  // Grade knobs.
+  compression?: number;
+  mute?: number;
 }
 
 export interface ApplyLutResult {

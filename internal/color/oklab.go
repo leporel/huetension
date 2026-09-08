@@ -50,8 +50,10 @@ func rgbToOkLab(r, g, b float64) (L, a, bb float64) {
 	return
 }
 
-// okLabToRGB takes OkLab and returns 0..1 sRGB (clamped).
-func okLabToRGB(L, a, b float64) (r, g, bb float64) {
+// okLabToLinearRGB takes OkLab and returns unclamped linear-light sRGB.
+// Values outside [0, 1] mean the colour is outside the sRGB gamut — the
+// gamut helpers rely on that signal, so no clamping happens here.
+func okLabToLinearRGB(L, a, b float64) (rl, gl, bl float64) {
 	lp := L + 0.3963377774*a + 0.2158037573*b
 	mp := L - 0.1055613458*a - 0.0638541728*b
 	sp := L - 0.0894841775*a - 1.2914855480*b
@@ -60,10 +62,15 @@ func okLabToRGB(L, a, b float64) (r, g, bb float64) {
 	m := mp * mp * mp
 	s := sp * sp * sp
 
-	rl := 4.0767416621*l - 3.3077115913*m + 0.2309699292*s
-	gl := -1.2684380046*l + 2.6097574011*m - 0.3413193965*s
-	bl := -0.0041960863*l - 0.7034186147*m + 1.7076147010*s
+	rl = 4.0767416621*l - 3.3077115913*m + 0.2309699292*s
+	gl = -1.2684380046*l + 2.6097574011*m - 0.3413193965*s
+	bl = -0.0041960863*l - 0.7034186147*m + 1.7076147010*s
+	return rl, gl, bl
+}
 
+// okLabToRGB takes OkLab and returns 0..1 sRGB (clamped).
+func okLabToRGB(L, a, b float64) (r, g, bb float64) {
+	rl, gl, bl := okLabToLinearRGB(L, a, b)
 	return clampUnit(linearToSRGB(rl)), clampUnit(linearToSRGB(gl)), clampUnit(linearToSRGB(bl))
 }
 

@@ -6,6 +6,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/leporel/huetension/internal/exporter"
 	"github.com/leporel/huetension/internal/palette"
 )
 
@@ -44,7 +45,7 @@ func handleColorSort(_ context.Context, _ *sdk.CallToolRequest, p ColorSortParam
 		Schema: schemaVersion,
 		Tool:   "color.sort",
 		Params: ColorSortParams{Colors: p.Colors, By: string(by), Reverse: p.Reverse},
-		Result: encodePalette(pal),
+		Result: exporter.EncodeResult(pal),
 	}, nil
 }
 

@@ -9,8 +9,9 @@ Color palette toolkit — a pure-Go core with three thin frontends: CLI, MCP, We
   `cliutil`); the CLI / MCP / web frontends stay thin.
 - `./huetension.go` is the public facade — re-exports the canonical types
   (`import "github.com/leporel/huetension"`); internal packages stay private.
-- The CLI must not import MCP or web types — `go list -deps ./cmd/huetension`
-  shows neither.
+- The CLI touches MCP / web / serve only through their `Config` + `Run` /
+  `Handler` seams in `cmd/huetension/cli/{mcp,web,serve}.go`; it never
+  builds on their internal types.
 
 ## Wire contract
 

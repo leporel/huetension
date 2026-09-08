@@ -120,9 +120,10 @@ function geometryFor(): WheelGeometry {
   if (!el) {
     return { cx: 0, cy: 0, rOuter: R_OUTER };
   }
-  // The wheel is 320 CSS-px; getBoundingClientRect gives the on-screen
-  // center in viewport coords, which is what the gesture composable
-  // compares pointer events against.
+  // The wheel is designed at SIZE CSS-px but may render smaller in a
+  // narrow column; getBoundingClientRect gives the on-screen center and
+  // width, which is what the gesture composable compares pointer events
+  // against.
   const rect = el.getBoundingClientRect();
   return {
     cx: rect.left + rect.width / 2,
@@ -234,9 +235,9 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="root" class="wheel" :style="{ width: SIZE + 'px', height: SIZE + 'px' }">
+  <div ref="root" class="wheel">
     <div class="disc" :style="{ background: DISC_GRADIENT }" />
-    <svg class="overlay" :width="SIZE" :height="SIZE" :viewBox="`0 0 ${SIZE} ${SIZE}`">
+    <svg class="overlay" width="100%" height="100%" :viewBox="`0 0 ${SIZE} ${SIZE}`">
       <line
         v-for="h in orderedHandles"
         :key="`l-${h.slot}`"
@@ -259,8 +260,8 @@ defineExpose({
         dragging: isDragging,
       }"
       :style="{
-        left: h.cx + 'px',
-        top: h.cy + 'px',
+        left: (h.cx / SIZE) * 100 + '%',
+        top: (h.cy / SIZE) * 100 + '%',
         background: h.hex,
       }"
       :aria-label="`slot ${h.slot} ${h.hex}`"
@@ -276,8 +277,15 @@ defineExpose({
 </template>
 
 <style scoped>
+/* Design size is SIZE px, but the wheel must stay a circle when its
+   column is narrower than that: width follows the container, height
+   follows width via aspect-ratio. Handles are placed in percentages and
+   the SVG scales through its viewBox, so the geometry stays consistent
+   at any rendered size (getGeometry derives rOuter from the live rect). */
 .wheel {
   position: relative;
+  width: min(100%, 320px);
+  aspect-ratio: 1 / 1;
   margin: 6px auto 0;
 }
 

@@ -241,6 +241,20 @@ type Config struct {
 	// the other library.* tools are read-only and ignore it. A read-only
 	// server also refuses saves, regardless of this path.
 	LibraryPath string
+
+	// LibraryStore, when set, is used instead of building a store from
+	// Library + LibraryPath. The combined `serve` command shares one store
+	// between the REST and MCP surfaces so saves never clobber each other.
+	LibraryStore *library.Store
+}
+
+// libraryStore returns the shared store when one was injected, otherwise
+// a fresh store over the configured index and path.
+func (c Config) libraryStore() *library.Store {
+	if c.LibraryStore != nil {
+		return c.LibraryStore
+	}
+	return library.NewStore(c.Library, c.LibraryPath)
 }
 
 // kind labels a selector entry. Bare names (no prefix) are kindTool for

@@ -101,7 +101,7 @@ func buildAppMux(cfg Config) (*http.ServeMux, error) {
 	mux := http.NewServeMux()
 	registerAPI(mux, base, apiHandlers{
 		sandbox: cfg.Sandbox,
-		library: newLibraryState(cfg.Library, cfg.LibraryPath, cfg.Sandbox.ReadOnly),
+		library: newLibraryState(cfg.libraryStore(), cfg.Sandbox.ReadOnly),
 		version: cfg.Version,
 	})
 

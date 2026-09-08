@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/leporel/huetension/internal/exporter"
 	"github.com/leporel/huetension/internal/harmony"
 	"github.com/leporel/huetension/internal/palette"
 )
@@ -70,7 +71,7 @@ func handlePaletteRandom(_ context.Context, _ *sdk.CallToolRequest, p PaletteRan
 		Schema: schemaVersion,
 		Tool:   "palette.random",
 		Params: PaletteRandomParams{Count: p.Count, Seed: p.Seed, Harmony: htype},
-		Result: encodePalette(pal),
+		Result: exporter.EncodeResult(pal),
 	}, nil
 }
 

@@ -16,10 +16,10 @@ func TestColorSort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleColorSort: %v", err)
 	}
-	if got := out.Result.Colors[0].Hex; got != "#ffffff" {
+	if got := out.Result.Palette.Colors[0].Hex; got != "#ffffff" {
 		t.Errorf("first = %q, want #ffffff (light first when reverse)", got)
 	}
-	if got := out.Result.Colors[2].Hex; got != "#000000" {
+	if got := out.Result.Palette.Colors[2].Hex; got != "#000000" {
 		t.Errorf("last = %q, want #000000", got)
 	}
 	if out.Schema != schemaVersion {
@@ -42,15 +42,15 @@ func TestHarmonyGenerateComplementary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleHarmonyGenerate: %v", err)
 	}
-	if out.Result.Size != 2 {
-		t.Errorf("size = %d, want 2", out.Result.Size)
+	if out.Result.Palette.Size != 2 {
+		t.Errorf("size = %d, want 2", out.Result.Palette.Size)
 	}
-	if out.Result.Colors[0].Hex != "#ff0000" {
-		t.Errorf("first = %q, want #ff0000", out.Result.Colors[0].Hex)
+	if out.Result.Palette.Colors[0].Hex != "#ff0000" {
+		t.Errorf("first = %q, want #ff0000", out.Result.Palette.Colors[0].Hex)
 	}
 	// On the RYB artist wheel red's complement is green, not cyan.
-	if out.Result.Colors[1].Hex != "#00ff4d" {
-		t.Errorf("second = %q, want #00ff4d (RYB green complement)", out.Result.Colors[1].Hex)
+	if out.Result.Palette.Colors[1].Hex != "#00ff4d" {
+		t.Errorf("second = %q, want #00ff4d (RYB green complement)", out.Result.Palette.Colors[1].Hex)
 	}
 }
 
@@ -63,8 +63,8 @@ func TestHarmonyGenerateCountExpansion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleHarmonyGenerate: %v", err)
 	}
-	if out.Result.Size != 5 {
-		t.Errorf("size = %d, want 5 (extra-slot expansion)", out.Result.Size)
+	if out.Result.Palette.Size != 5 {
+		t.Errorf("size = %d, want 5 (extra-slot expansion)", out.Result.Palette.Size)
 	}
 }
 
@@ -87,15 +87,15 @@ func TestGradientGenerateFromTo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleGradientGenerate: %v", err)
 	}
-	if out.Result.Size != 5 {
-		t.Errorf("size = %d, want 5", out.Result.Size)
+	if out.Result.Palette.Size != 5 {
+		t.Errorf("size = %d, want 5", out.Result.Palette.Size)
 	}
 	// First and last should be bit-exact endpoints.
-	if out.Result.Colors[0].Hex != "#ff0000" {
-		t.Errorf("first = %q, want #ff0000", out.Result.Colors[0].Hex)
+	if out.Result.Palette.Colors[0].Hex != "#ff0000" {
+		t.Errorf("first = %q, want #ff0000", out.Result.Palette.Colors[0].Hex)
 	}
-	if out.Result.Colors[4].Hex != "#0000ff" {
-		t.Errorf("last = %q, want #0000ff", out.Result.Colors[4].Hex)
+	if out.Result.Palette.Colors[4].Hex != "#0000ff" {
+		t.Errorf("last = %q, want #0000ff", out.Result.Palette.Colors[4].Hex)
 	}
 }
 
@@ -107,8 +107,8 @@ func TestGradientGenerateMultiStop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleGradientGenerate: %v", err)
 	}
-	if out.Result.Size != 5 {
-		t.Errorf("size = %d, want 5", out.Result.Size)
+	if out.Result.Palette.Size != 5 {
+		t.Errorf("size = %d, want 5", out.Result.Palette.Size)
 	}
 }
 
@@ -262,13 +262,13 @@ func TestPaletteRandomSeeded(t *testing.T) {
 	}
 	_, out1, _ := handlePaletteRandom(context.Background(), nil, PaletteRandomParams{Count: 5, Seed: 42})
 	_, out2, _ := handlePaletteRandom(context.Background(), nil, PaletteRandomParams{Count: 5, Seed: 42})
-	if len(out1.Result.Colors) != 5 {
-		t.Errorf("size = %d, want 5", len(out1.Result.Colors))
+	if len(out1.Result.Palette.Colors) != 5 {
+		t.Errorf("size = %d, want 5", len(out1.Result.Palette.Colors))
 	}
-	for i := range out1.Result.Colors {
-		if out1.Result.Colors[i].Hex != out2.Result.Colors[i].Hex {
+	for i := range out1.Result.Palette.Colors {
+		if out1.Result.Palette.Colors[i].Hex != out2.Result.Palette.Colors[i].Hex {
 			t.Errorf("seed=42 not deterministic at %d: %s vs %s",
-				i, out1.Result.Colors[i].Hex, out2.Result.Colors[i].Hex)
+				i, out1.Result.Palette.Colors[i].Hex, out2.Result.Palette.Colors[i].Hex)
 		}
 	}
 }
@@ -282,8 +282,8 @@ func TestPaletteRandomHarmony(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handlePaletteRandom: %v", err)
 	}
-	if out.Result.Size != 5 {
-		t.Errorf("size = %d, want 5 (extra-slot expansion of 3-anchor triadic)", out.Result.Size)
+	if out.Result.Palette.Size != 5 {
+		t.Errorf("size = %d, want 5 (extra-slot expansion of 3-anchor triadic)", out.Result.Palette.Size)
 	}
 }
 

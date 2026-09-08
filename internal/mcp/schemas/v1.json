@@ -50,8 +50,7 @@
           "type": "array",
           "description": "Colors in canonical order.",
           "items": { "$ref": "#/$defs/color" }
-        },
-        "metadata": { "$ref": "#/$defs/metadata" }
+        }
       }
     },
     "color": {
@@ -70,6 +69,13 @@
           "maxItems": 3,
           "items": { "type": "integer", "minimum": 0, "maximum": 255 },
           "description": "sRGB 8-bit channels [r, g, b]."
+        },
+        "rgba": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+          "description": "Optional. sRGB 8-bit channels plus alpha [r, g, b, a]; present only when the color is translucent."
         },
         "hsl": {
           "type": "array",

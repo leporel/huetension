@@ -53,13 +53,16 @@ const LUT_LEVELS: { level: number; value: number; label: string }[] = [
 // saturation); each method has its own knob set so toggling the
 // method doesn't fight with a previous method's slider drag.
 const DEFAULTS = {
-    method: "rbf" as LutMethod,
+    method: "grade" as LutMethod,
+    // Grade (default) — hue-wheel compression, lightness preserved.
+    compression: 0.7,
+    mute: 0.3,
     // K-NN (legacy "Layered").
     radius: 0.4,
     distribution: 0.15,
     intensity: 0.9,
     blend: 2,
-    // RBF (default "Smooth").
+    // RBF ("Smooth").
     reach: 0.2,
     sharpness: 2.0,
     strength: 0.9,
@@ -101,6 +104,9 @@ const lutBlend = ref<number>(DEFAULTS.blend);
 const lutReach = ref(DEFAULTS.reach);
 const lutSharpness = ref(DEFAULTS.sharpness);
 const lutStrength = ref(DEFAULTS.strength);
+// Grade knobs.
+const lutCompression = ref(DEFAULTS.compression);
+const lutMute = ref(DEFAULTS.mute);
 // Shared.
 const lutSaturation = ref(DEFAULTS.saturation);
 const lutSize = ref<number>(DEFAULTS.lutSize);
@@ -258,6 +264,8 @@ function currentLutParams() {
         reach: lutReach.value,
         sharpness: lutSharpness.value,
         strength: lutStrength.value,
+        compression: lutCompression.value,
+        mute: lutMute.value,
         include_saturation: lutSaturation.value,
         size: lutSize.value,
     };
@@ -310,6 +318,8 @@ function resetLUTDefaults(): void {
     lutReach.value = DEFAULTS.reach;
     lutSharpness.value = DEFAULTS.sharpness;
     lutStrength.value = DEFAULTS.strength;
+    lutCompression.value = DEFAULTS.compression;
+    lutMute.value = DEFAULTS.mute;
     lutSaturation.value = DEFAULTS.saturation;
     lutSize.value = DEFAULTS.lutSize;
 }
@@ -387,6 +397,8 @@ watchDebounced(
         lutReach,
         lutSharpness,
         lutStrength,
+        lutCompression,
+        lutMute,
         lutSaturation,
         lutSize,
         () => workspace.colors,
@@ -410,6 +422,8 @@ watchDebounced(
         lutReach,
         lutSharpness,
         lutStrength,
+        lutCompression,
+        lutMute,
         lutSaturation,
         lutSize,
         () => workspace.colors,
@@ -597,6 +611,16 @@ function download(): void {
                     <button
                         type="button"
                         class="lut-method-btn"
+                        :class="{ active: lutMethod === 'grade' }"
+                        role="radio"
+                        :aria-checked="lutMethod === 'grade'"
+                        @click="lutMethod = 'grade'"
+                    >
+                        Grade
+                    </button>
+                    <button
+                        type="button"
+                        class="lut-method-btn"
                         :class="{ active: lutMethod === 'rbf' }"
                         role="radio"
                         :aria-checked="lutMethod === 'rbf'"
@@ -617,10 +641,41 @@ function download(): void {
                 </div>
 
                 <div class="lut-grid">
+                    <!-- Grade knobs — the hue wheel is squeezed onto the
+                         palette's hues (vectorscope compression); lightness
+                         is never touched, so the image keeps its tonality. -->
+                    <template v-if="lutMethod === 'grade'">
+                        <label class="lut-fld">
+                            <span
+                                >Compression
+                                <em>{{ lutCompression.toFixed(2) }}</em></span
+                            >
+                            <input
+                                v-model.number="lutCompression"
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                aria-label="how hard hues are squeezed onto the palette"
+                            />
+                        </label>
+                        <label class="lut-fld">
+                            <span>Mute <em>{{ lutMute.toFixed(2) }}</em></span>
+                            <input
+                                v-model.number="lutMute"
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                aria-label="desaturate hues between palette colours"
+                            />
+                        </label>
+                    </template>
+
                     <!-- RBF (Smooth) knobs — Gaussian-like kernel over every
                          palette colour, blended in OkLab a/b. No Voronoi edges,
                          no antipodal hue collapse. -->
-                    <template v-if="lutMethod === 'rbf'">
+                    <template v-else-if="lutMethod === 'rbf'">
                         <label class="lut-fld">
                             <span
                                 >Reach <em>{{ lutReach.toFixed(2) }}</em></span

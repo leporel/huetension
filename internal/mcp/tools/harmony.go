@@ -8,6 +8,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/leporel/huetension/internal/color"
+	"github.com/leporel/huetension/internal/exporter"
 	"github.com/leporel/huetension/internal/harmony"
 	"github.com/leporel/huetension/internal/palette"
 )
@@ -62,7 +63,7 @@ func handleHarmonyGenerate(_ context.Context, _ *sdk.CallToolRequest, p HarmonyG
 		Schema: schemaVersion,
 		Tool:   "harmony.generate",
 		Params: HarmonyGenerateParams{Type: string(t), Base: p.Base, Count: p.Count, Step: p.Step},
-		Result: encodePalette(pal),
+		Result: exporter.EncodeResult(pal),
 	}, nil
 }
 

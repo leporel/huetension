@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -41,25 +40,14 @@ const applyLUTTimeout = 30 * time.Second
 // generate step is cheap (deterministic, palette-sized work) and the
 // alternative (uploading a multi-MB .cube text per call) is worse.
 type applyLUTParams struct {
-	Colors            []string `json:"colors"`
-	Method            string   `json:"method,omitempty"` // "knn" (legacy default) | "rbf" (smooth)
-	IncludeSaturation bool     `json:"include_saturation"`
-	// Size is the cube edge per channel. Any integer ≥ 2 is accepted —
-	// for `apply-lut` it does not need to be a perfect square because
+	lutKnobs
+
+	Colors []string `json:"colors"`
+	// Size is the cube edge per channel, 2..lutMaxWebSize (default 33).
+	// For `apply-lut` it does not need to be a perfect square because
 	// we feed the cube directly to ffmpeg's `lut3d` (text format), not
 	// as a 2D texture.
 	Size int `json:"size,omitempty"`
-
-	// K-NN knobs.
-	Radius         float64 `json:"radius"`
-	Distribution   float64 `json:"distribution"`
-	Intensity      float64 `json:"intensity"`
-	BlendNeighbors int     `json:"blend_neighbors"`
-
-	// RBF knobs.
-	Reach     float64 `json:"reach,omitempty"`
-	Sharpness float64 `json:"sharpness,omitempty"`
-	Strength  float64 `json:"strength,omitempty"`
 }
 
 // applyLUTResult is the wire shape for a single graded output. Multi-
@@ -144,19 +132,11 @@ func (h apiHandlers) handleApplyLUT(w http.ResponseWriter, r *http.Request) {
 	if cubeSize == 0 {
 		cubeSize = 33
 	}
-	method := normaliseLUTMethod(params.Method)
-	generated, err := lut.Generate(palette.New(colors), lut.Options{
-		Size:              cubeSize,
-		Method:            method,
-		IncludeSaturation: params.IncludeSaturation,
-		Radius:            params.Radius,
-		Distribution:      params.Distribution,
-		Intensity:         params.Intensity,
-		BlendNeighbors:    max(params.BlendNeighbors, 1),
-		Reach:             params.Reach,
-		Sharpness:         params.Sharpness,
-		Strength:          params.Strength,
-	})
+	if err := validateWebLUTSize(cubeSize); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	generated, err := lut.Generate(palette.New(colors), params.options(cubeSize))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -178,21 +158,10 @@ func (h apiHandlers) handleApplyLUT(w http.ResponseWriter, r *http.Request) {
 	}
 
 	envParams := map[string]any{
-		"images":             len(imageParts),
-		"cube_size":          cubeSize,
-		"method":             method,
-		"include_saturation": params.IncludeSaturation,
+		"images":    len(imageParts),
+		"cube_size": cubeSize,
 	}
-	if method == lut.MethodKNN {
-		envParams["radius"] = params.Radius
-		envParams["distribution"] = params.Distribution
-		envParams["intensity"] = params.Intensity
-		envParams["blend_neighbors"] = params.BlendNeighbors
-	} else {
-		envParams["reach"] = params.Reach
-		envParams["sharpness"] = params.Sharpness
-		envParams["strength"] = params.Strength
-	}
+	params.envelopeParams(envParams)
 	writeEnvelope(w, "lut.apply", envParams, batch)
 }
 
@@ -200,29 +169,7 @@ func validateApplyLUTParams(p applyLUTParams) error {
 	if len(p.Colors) == 0 {
 		return errors.New("no colors provided")
 	}
-	switch normaliseLUTMethod(p.Method) {
-	case lut.MethodKNN:
-		if math.IsNaN(p.Radius) || math.IsInf(p.Radius, 0) || p.Radius < 0 {
-			return fmt.Errorf("radius: must be a finite value ≥ 0, got %v", p.Radius)
-		}
-		if p.Distribution < 0 || p.Distribution > 1 {
-			return fmt.Errorf("distribution: must be in [0, 1], got %v", p.Distribution)
-		}
-		if p.Intensity < 0 || p.Intensity > 1 {
-			return fmt.Errorf("intensity: must be in [0, 1], got %v", p.Intensity)
-		}
-	case lut.MethodRBF:
-		if math.IsNaN(p.Reach) || math.IsInf(p.Reach, 0) || p.Reach <= 0 {
-			return fmt.Errorf("reach: must be a finite value > 0, got %v", p.Reach)
-		}
-		if math.IsNaN(p.Sharpness) || math.IsInf(p.Sharpness, 0) || p.Sharpness <= 0 {
-			return fmt.Errorf("sharpness: must be a finite value > 0, got %v", p.Sharpness)
-		}
-		if p.Strength < 0 || p.Strength > 1 {
-			return fmt.Errorf("strength: must be in [0, 1], got %v", p.Strength)
-		}
-	}
-	return nil
+	return p.validate()
 }
 
 type imagePart struct {

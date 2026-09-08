@@ -9,7 +9,6 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/leporel/huetension/internal/mcp/tools"
-	"github.com/leporel/huetension/internal/palette/library"
 )
 
 // implementationName is the MCP `serverInfo.name` reported to clients. Kept
@@ -27,7 +26,7 @@ func depsFromConfig(cfg Config, logger *slog.Logger) tools.Deps {
 			MaxImageBytes:        cfg.MaxImageBytes,
 			BlockPrivateNetworks: cfg.BlockPrivateNetworks,
 		},
-		Library: library.NewStore(cfg.Library, cfg.LibraryPath),
+		Library: cfg.libraryStore(),
 		Logger:  logger,
 	}
 }

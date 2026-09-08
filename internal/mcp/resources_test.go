@@ -10,7 +10,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/leporel/huetension/internal/mcp/tools"
+	"github.com/leporel/huetension/internal/exporter"
 )
 
 // TestResourcesListAndRead drives a full resources/list → resources/read
@@ -94,10 +94,11 @@ func TestResourcesListAndRead(t *testing.T) {
 }
 
 // TestEnvelopeSchemaDoesNotDriftFromGoStructs is the "structural drift"
-// guard for the hand-written schema. We reflect over PaletteResult and
-// ColorEntry's JSON tags and assert each side knows about the same
-// fields. If someone adds a field to ColorEntry without updating
-// schemas/v1.json (or vice versa), this test fails.
+// guard for the hand-written schema. We reflect over the exporter's
+// PaletteJSON / ColorJSON tags (the types every frontend emits) and
+// assert each side knows about the same fields. If someone adds a field
+// to ColorJSON without updating schemas/v1.json (or vice versa), this
+// test fails.
 //
 // Scope: this catches field-set drift (the realistic mode) but not type
 // or constraint drift — flipping `Hex string` to `Hex int`, or relaxing
@@ -108,13 +109,13 @@ func TestEnvelopeSchemaDoesNotDriftFromGoStructs(t *testing.T) {
 
 	t.Run("palette", func(t *testing.T) {
 		schemaProps := defsProperties(t, doc, "palette")
-		goProps := jsonFields(reflect.TypeFor[tools.PaletteResult]())
+		goProps := jsonFields(reflect.TypeFor[exporter.PaletteJSON]())
 		assertSameSet(t, "$defs.palette.properties", goProps, schemaProps)
 	})
 
 	t.Run("color", func(t *testing.T) {
 		schemaProps := defsProperties(t, doc, "color")
-		goProps := jsonFields(reflect.TypeFor[tools.ColorEntry]())
+		goProps := jsonFields(reflect.TypeFor[exporter.ColorJSON]())
 		assertSameSet(t, "$defs.color.properties", goProps, schemaProps)
 	})
 }
